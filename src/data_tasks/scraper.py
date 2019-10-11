@@ -394,11 +394,9 @@ for ch in initials:
 
                                         except Exception as e:
                                             print("Song data", e)
-                                            session.close()
                                             continue
                         except Exception as e:
                             print("Band data", e)
-                            session.close()
                             continue
     except Exception as e:
         print("First try", e)
