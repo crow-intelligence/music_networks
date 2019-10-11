@@ -178,7 +178,7 @@ for ch in initials:
                                 member_id[l.text] = l["href"]
                             for member, uri in member_id.items():
                                 member_query = (
-                                    session.query(Person).filter_by(name=member).first()
+                                    session.query(Person).filter_by(uri=uri).first()
                                 )
                                 if not member_query:
                                     member_entry = Person(name=member, uri=uri)
@@ -394,10 +394,15 @@ for ch in initials:
 
                                         except Exception as e:
                                             print("Song data", e)
+                                            session.close()
+                                            continue
                         except Exception as e:
                             print("Band data", e)
+                            session.close()
+                            continue
     except Exception as e:
         print("First try", e)
         session.close()
+        continue
     else:
         session.close()
