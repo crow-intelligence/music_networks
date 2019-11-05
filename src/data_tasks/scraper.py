@@ -1,7 +1,6 @@
 import re
+from concurrent.futures import ThreadPoolExecutor
 
-import requests
-import bs4
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, UnicodeText
@@ -60,7 +59,7 @@ class Song(Base):
     __tablename__ = "song"
     id = Column(Integer, primary_key=True)
     lyrics = Column(UnicodeText)
-    title = Column(String(500))
+    title = Column(String(1000))
 
 
 class Song2Year(Base):
@@ -137,9 +136,190 @@ class Composer2Song(Base):
 engine = create_engine(db, echo=False)
 Base.metadata.create_all(engine)
 
+
 ###############################################################################
 #####                        Collect data                                 #####
 ###############################################################################
+def band_link_processor(song_link, band_name):
+    session_factory = sessionmaker(bind=engine)
+    Session = scoped_session(session_factory)
+    session = Session()
+    # header = {"User-Agent": ua.random}
+    song_url = prefix + song_link
+    try:
+        song_html = request_with_proxy(song_url)
+        # song_html = requests.get(
+        #     song_url, headers=header
+        # ).text
+        song_soup = BeautifulSoup(song_html, "lxml")
+        song_title = song_soup.find_all("title")[0].text
+        song_title = song_title.split(":")[1]
+        song_title = song_title.replace(" dalszöveg, videó - Zeneszöveg.hu", "")
+        song_title = song_title.strip()
+        print(song_title)
+        song_text = song_soup.find_all("div", class_="lyrics-plain-text")
+        song_text = [s.text for s in song_text][0]
+        song_infos = song_soup.find_all(
+            "div", {"class": "lyrics-header-text short"}
+        )
+        songy = session.query(Song).filter_by(title=song_title).first()
+        if not songy:
+            song_entry = Song(title=song_title, lyrics=song_text)
+            session.add(song_entry)
+            session.flush()
+            session.refresh(song_entry)
+            songid = song_entry.id
+            session.commit()
+        else:
+            songid = songy.id
+        eloado = []
+        szovegirok = []
+        zeneszerzok = []
+        megejelnes = 0
+        for song_info in song_infos:
+            song_table = BeautifulSoup(str(song_info), "lxml")
+            table = song_table.find("table")
+            data = []
+            for label in table.select("th, td.attrLabels"):
+                key = re.sub(r"\W+", "", label.text.strip())
+                value = label.find_next_sibling().text.strip()
+
+                data.append({key: value})
+            for d in data:
+                if "Szövegírók" in d:
+                    authors = d["Szövegírók"].split("\n")
+                    szovegirok.extend(authors)
+                if "Előadó" in d:
+                    performers = d["Előadó"].split("\n")
+                    eloado.extend(performers)
+                if "Zeneszerzők" in d:
+                    composers = d["Zeneszerzők"].split("\n")
+                    zeneszerzok.extend(composers)
+                if "Megjelenés" in d:
+                    year = d["Megjelenés"]
+                    try:
+                        megjelenes = int(year)
+                    except Exception as e:
+                        megjelenes = 0
+        if not eloado:
+            eloado = [band_name]
+        if not szovegirok:
+            szovegirok = [band_name]
+        if not zeneszerzok:
+            zeneszerzok = [band_name]
+        song2year_query = session.query(Song2Year).filter_by(songid=songid).first()
+        if not song2year_query:
+            song2year_entry = Song2Year(songid=songid, year=megejelnes)
+            session.add(song2year_entry)
+            session.commit()
+
+        song2title_query = session.query(Song2Title).filter_by(songid=songid).first()
+        if not song2title_query:
+            song2title_entry = Song2Title(songid=songid, songtitle=song_title)
+            session.add(song2title_entry)
+            session.commit()
+        # performers
+        for ea in eloado:
+            if "(" in ea and ")" in ea:
+                startch = ea.index("(")
+                endch = ea.index(")")
+                aka = ea[startch + 1 : endch]
+                ea = ea.replace("(", "")
+                ea = ea.replace(")", "")
+                ea = ea.replace(aka, "")
+            else:
+                aka = "None"
+            # performer
+            performer_query = (
+                session.query(Performer).filter_by(name=ea).first()
+            )
+            if not performer_query:
+                performer_entry = Performer(name=ea, aka=aka)
+                session.add(performer_entry)
+                session.flush()
+                session.refresh(performer_entry)
+                performer_id = performer_entry.id
+                session.commit()
+            else:
+                performer_id = performer_query.id
+            # preformer2song
+            performer2song_entry = Performer2Song(
+                songid=songid, performerid=performer_id
+            )
+            session.add(performer2song_entry)
+            session.commit()
+            for m2a in members2add:
+                person2performer_entry = Person2Performer(
+                    personid=m2a, performerid=performer_id
+                )
+                session.add(person2performer_entry)
+                session.commit()
+        # composers
+        for zs in zeneszerzok:
+            if "(" in zs and ")" in zs:
+                startch = zs.index("(")
+                endch = zs.index(")")
+                aka = zs[startch + 1 : endch]
+                zs = zs.replace("(", "")
+                zs = zs.replace(")", "")
+                zs = zs.replace(aka, "")
+            else:
+                aka = "None"
+            # composer
+            zeneszerzo_query = (
+                session.query(Composer).filter_by(name=zs).first()
+            )
+            if not zeneszerzo_query:
+                zeneszerzo_entry = Composer(name=zs, aka=aka)
+                session.add(zeneszerzo_entry)
+                session.flush()
+                session.refresh(zeneszerzo_entry)
+                zeneszerzo_id = zeneszerzo_entry.id
+                session.commit()
+            else:
+                zeneszerzo_id = zeneszerzo_query.id
+            # composer2song
+            composer2song_entry = Composer2Song(
+                songid=songid, composerid=zeneszerzo_id
+            )
+            session.add(composer2song_entry)
+            session.commit()
+
+            # authors
+        for author in szovegirok:
+            if "(" in author and ")" in author:
+                startch = author.index("(")
+                endch = author.index(")")
+                aka = author[startch + 1 : endch]
+                author = author.replace("(", "")
+                author = author.replace(")", "")
+                author = author.replace(aka, "")
+            else:
+                aka = "None"
+            author_query = session.query(Author).filter_by(name=author).first()
+
+            if not author_query:
+                author_entry = Author(name=author, aka=aka)
+                session.add(author_entry)
+                session.flush()
+                session.refresh(author_entry)
+                author_id = author_entry.id
+                session.commit()
+            else:
+                author_id = author_query.id
+
+            # author2song
+            author2song_entry = Author2Song(songid=songid, authorid=author_id)
+            session.add(author2song_entry)
+            session.commit()
+        session.close()
+    except Exception as e:
+        print("song processing failed", e)
+        session.close()
+        pass
+
+
+
 for ch in initials:
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXX", ch)
     session_factory = sessionmaker(bind=engine)
@@ -159,12 +339,18 @@ for ch in initials:
                     if link["href"] not in stoplist:
                         band_name = link.text
                         band_page = prefix + link["href"]
-                        header = {"User-Agent": ua.random}
+                        normalized_name = link["href"].split("/")[-1].replace("-dalszovegei.html", "")
+                        print(band_page)
+                        # header = {"User-Agent": ua.random}
                         try:
                             band_html = request_with_proxy(band_page)
                             # band_html = requests.get(band_page, headers=header).text
                             band_soup = BeautifulSoup(band_html, "lxml")
                             band_links = band_soup.find_all("a")
+                            song_links = [link["href"] for link in band_links if "href" in link.attrs]
+                            song_links = [link for link in song_links if normalized_name in link]
+                            song_links = [link for link in song_links if link.startswith("dalszoveg")]
+                            print(song_links)
                             members = [
                                 l
                                 for l in band_links
@@ -190,216 +376,17 @@ for ch in initials:
                                 else:
                                     memberid = member_query.id
                                 members2add.append(memberid)
-                            for band_link in band_links:
-                                if band_link["href"].startswith("dalszoveg/"):
-                                    if "href" in band_link.attrs:
-                                        song_title = band_link.text
-                                        header = {"User-Agent": ua.random}
-                                        song_url = prefix + band_link["href"]
-                                        try:
-                                            song_html = request_with_proxy(song_url)
-                                            # song_html = requests.get(
-                                            #     song_url, headers=header
-                                            # ).text
-                                            song_soup = BeautifulSoup(song_html, "lxml")
-                                            song_text = song_soup.find_all(
-                                                "div", class_="lyrics-plain-text"
-                                            )
-                                            song_text = [s.text for s in song_text][0]
-                                            song_infos = song_soup.find_all(
-                                                "div",
-                                                {"class": "lyrics-header-text short"},
-                                            )
-                                            song_entry = Song(
-                                                title=song_title, lyrics=song_text
-                                            )
-                                            session.add(song_entry)
-                                            session.flush()
-                                            session.refresh(song_entry)
-                                            songid = song_entry.id
-                                            session.commit()
-                                            eloado = []
-                                            szovegirok = []
-                                            zeneszerzok = []
-                                            megejelnes = 0
-                                            for song_info in song_infos:
-                                                song_table = BeautifulSoup(
-                                                    str(song_info), "lxml"
-                                                )
-                                                table = song_table.find("table")
-                                                data = []
-                                                for label in table.select(
-                                                    "th, td.attrLabels"
-                                                ):
-                                                    key = re.sub(
-                                                        r"\W+", "", label.text.strip()
-                                                    )
-                                                    value = (
-                                                        label.find_next_sibling().text.strip()
-                                                    )
-
-                                                    data.append({key: value})
-                                                for d in data:
-                                                    if "Szövegírók" in d:
-                                                        authors = d["Szövegírók"].split(
-                                                            "\n"
-                                                        )
-                                                        szovegirok.extend(authors)
-                                                    if "Előadó" in d:
-                                                        performers = d["Előadó"].split(
-                                                            "\n"
-                                                        )
-                                                        eloado.extend(performers)
-                                                    if "Zeneszerzők" in d:
-                                                        composers = d[
-                                                            "Zeneszerzők"
-                                                        ].split("\n")
-                                                        zeneszerzok.extend(composers)
-                                                    if "Megjelenés" in d:
-                                                        year = d["Megjelenés"]
-                                                        try:
-                                                            megjelenes = int(year)
-                                                        except Exception as e:
-                                                            megjelenes = 0
-                                            if not eloado:
-                                                eloado = [band_name]
-                                            if not szovegirok:
-                                                szovegirok = [band_name]
-                                            if not zeneszerzok:
-                                                zeneszerzok = [band_name]
-                                            song2year_entry = Song2Year(
-                                                songid=songid, year=megejelnes
-                                            )
-                                            session.add(song2year_entry)
-                                            session.commit()
-
-                                            song2title_entry = Song2Title(
-                                                songid=songid, songtitle=song_title
-                                            )
-                                            session.add(song2title_entry)
-                                            session.commit()
-                                            # performers
-                                            for ea in eloado:
-                                                if "(" in ea and ")" in ea:
-                                                    startch = ea.index("(")
-                                                    endch = ea.index(")")
-                                                    aka = ea[startch + 1 : endch]
-                                                    ea = ea.replace("(", "")
-                                                    ea = ea.replace(")", "")
-                                                    ea = ea.replace(aka, "")
-                                                else:
-                                                    aka = "None"
-                                                # performer
-                                                performer_query = (
-                                                    session.query(Performer)
-                                                    .filter_by(name=ea)
-                                                    .first()
-                                                )
-                                                if not performer_query:
-                                                    performer_entry = Performer(
-                                                        name=ea, aka=aka
-                                                    )
-                                                    session.add(performer_entry)
-                                                    session.flush()
-                                                    session.refresh(performer_entry)
-                                                    performer_id = performer_entry.id
-                                                    session.commit()
-                                                else:
-                                                    performer_id = performer_query.id
-                                                # preformer2song
-                                                performer2song_entry = Performer2Song(
-                                                    songid=songid,
-                                                    performerid=performer_id,
-                                                )
-                                                session.add(performer2song_entry)
-                                                session.commit()
-                                                for m2a in members2add:
-                                                    person2performer_entry = Person2Performer(
-                                                        personid=m2a,
-                                                        performerid=performer_id,
-                                                    )
-                                                    session.add(person2performer_entry)
-                                                    session.commit()
-                                            # composers
-                                            for zs in zeneszerzok:
-                                                if "(" in zs and ")" in zs:
-                                                    startch = zs.index("(")
-                                                    endch = zs.index(")")
-                                                    aka = zs[startch + 1 : endch]
-                                                    ea = zs.replace("(", "")
-                                                    ea = zs.replace(")", "")
-                                                    ea = zs.replace(aka, "")
-                                                else:
-                                                    aka = "None"
-                                                # composer
-                                                zeneszerzo_query = (
-                                                    session.query(Composer)
-                                                    .filter_by(name=zs)
-                                                    .first()
-                                                )
-                                                if not zeneszerzo_query:
-                                                    zeneszerzo_entry = Composer(
-                                                        name=zs, aka=aka
-                                                    )
-                                                    session.add(zeneszerzo_entry)
-                                                    session.flush()
-                                                    session.refresh(zeneszerzo_entry)
-                                                    zeneszerzo_id = zeneszerzo_entry.id
-                                                    session.commit()
-                                                else:
-                                                    zeneszerzo_id = zeneszerzo_query.id
-                                                # composer2song
-                                                composer2song_entry = Composer2Song(
-                                                    songid=songid,
-                                                    composerid=zeneszerzo_id,
-                                                )
-                                                session.add(composer2song_entry)
-                                                session.commit()
-
-                                                # authors
-                                            for author in szovegirok:
-                                                if "(" in author and ")" in author:
-                                                    startch = author.index("(")
-                                                    endch = author.index(")")
-                                                    aka = author[startch + 1 : endch]
-                                                    author = author.replace("(", "")
-                                                    author = author.replace(")", "")
-                                                    author = author.replace(aka, "")
-                                                else:
-                                                    aka = "None"
-                                                author_query = (
-                                                    session.query(Author)
-                                                    .filter_by(name=author)
-                                                    .first()
-                                                )
-
-                                                if not author_query:
-                                                    author_entry = Author(
-                                                        name=author, aka=aka
-                                                    )
-                                                    session.add(author_entry)
-                                                    session.flush()
-                                                    session.refresh(author_entry)
-                                                    author_id = author_entry.id
-                                                    session.commit()
-                                                else:
-                                                    author_id = author_query.id
-
-                                                # author2song
-                                                author2song_entry = Author2Song(
-                                                    songid=songid, authorid=author_id
-                                                )
-                                                session.add(author2song_entry)
-                                                session.commit()
-
-                                        except Exception as e:
-                                            print("Song data", e)
-                                            continue
+                            with ThreadPoolExecutor(
+                                max_workers=len(song_links)
+                            ) as executor:
+                                for song_link in song_links:
+                                    executor.submit(band_link_processor, song_link, band_name)
+                                # executor.map(band_link_processor, song_links)
                         except Exception as e:
-                            print("Band data", e)
+                            print("inner", e)
                             continue
     except Exception as e:
-        print("First try", e)
+        print("outer", e)
         session.close()
         continue
     else:
