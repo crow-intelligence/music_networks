@@ -23,7 +23,7 @@ def get_proxies():
     return proxies
 
 
-def request_with_proxy(url):
+def with_proxies(url):
     proxies = get_proxies()
     proxy_pool = cycle(proxies)
     for i in range(0, len(proxies)):
@@ -39,3 +39,15 @@ def request_with_proxy(url):
         except Exception as e:
             continue
     return None
+
+
+def request_with_proxy(url):
+    try:
+        header = {"User-Agent": ua.random}
+        response = requests.get(url, headers=header)
+        if response.status_code == 200:
+            return response.text
+        else:
+            return with_proxies(url)
+    except Exception as e:
+        return None

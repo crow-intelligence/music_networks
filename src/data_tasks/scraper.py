@@ -1,4 +1,5 @@
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from bs4 import BeautifulSoup
@@ -155,7 +156,9 @@ def band_link_processor(song_link, band_name):
         song_title = song_soup.find_all("title")[0].text
         song_title = song_title.split(":")[1]
         song_title = song_title.replace(" dalszöveg, videó - Zeneszöveg.hu", "")
+        song_title = song_title.replace(" dalszöveg - Zeneszöveg.hu", "")
         song_title = song_title.strip()
+        song_title = band_name.strip() + "|" + song_title
         print(song_title)
         song_text = song_soup.find_all("div", class_="lyrics-plain-text")
         song_text = [s.text for s in song_text][0]
@@ -319,7 +322,6 @@ def band_link_processor(song_link, band_name):
         pass
 
 
-
 for ch in initials:
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXX", ch)
     session_factory = sessionmaker(bind=engine)
@@ -337,7 +339,7 @@ for ch in initials:
             if "href" in link.attrs:
                 if link["href"].startswith("egyuttes/"):
                     if link["href"] not in stoplist:
-                        band_name = link.text
+                        band_name = link.text.strip()
                         band_page = prefix + link["href"]
                         normalized_name = link["href"].split("/")[-1].replace("-dalszovegei.html", "")
                         print(band_page)
@@ -350,7 +352,6 @@ for ch in initials:
                             song_links = [link["href"] for link in band_links if "href" in link.attrs]
                             song_links = [link for link in song_links if normalized_name in link]
                             song_links = [link for link in song_links if link.startswith("dalszoveg")]
-                            print(song_links)
                             members = [
                                 l
                                 for l in band_links
@@ -382,6 +383,7 @@ for ch in initials:
                                 for song_link in song_links:
                                     executor.submit(band_link_processor, song_link, band_name)
                                 # executor.map(band_link_processor, song_links)
+                            time.sleep(1)
                         except Exception as e:
                             print("inner", e)
                             continue
