@@ -47,6 +47,28 @@ initials = [
     "y",
     "z",
 ]
+starting_pages = []
+for ch in initials:
+    print("XXXXXXXXXXXXXXXXXXXXXXXXXXXX", ch)
+    url = base_url + ch
+    header = {"User-Agent": ua.random}
+    try:
+        html = request_with_proxy(url)
+        starting_pages.append(ch)
+        soup = BeautifulSoup(html, "lxml")
+        range_end = soup.find_all("a", {"class": "pgPassive"})
+        range_end = [e for e in range_end if "Utolsó" in e.text][0]
+        range_end = int(range_end["href"].split("=")[1])
+        if range_end > 1:
+            for j in range(2, range_end+1):
+                t = f"{ch}&page={j}"
+                print(t)
+                starting_pages.append(t)
+    except Exception as e:
+        print(e)
+        continue
+print("We have", len(starting_pages), "starting pages!")
+
 stoplist = ["egyuttes/uj.html", "szemely/uj.html"]
 ###############################################################################
 #####                               DB                                    #####
@@ -322,7 +344,7 @@ def band_link_processor(song_link, band_name):
         pass
 
 
-for ch in initials:
+for ch in starting_pages:
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXX", ch)
     session_factory = sessionmaker(bind=engine)
     Session = scoped_session(session_factory)
