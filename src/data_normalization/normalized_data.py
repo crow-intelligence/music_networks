@@ -1,3 +1,4 @@
+import operator
 from collections import Counter
 from itertools import combinations
 
@@ -116,6 +117,7 @@ id_author = {}
 for row in session.query(Author):
     id = row.id
     name = row.name
+    name = row.name.strip().title()
     if name not in author_id and "Keressük " not in name:
         author_id[name] = id
         id_author[id] = name
@@ -125,6 +127,7 @@ id_composer = {}
 for row in session.query(Composer):
     id = row.id
     name = row.name
+    name = row.name.strip().title()
     if name not in composer_id and "Keressük " not in name:
         composer_id[name] = id
         id_composer[id] = name
@@ -134,6 +137,7 @@ id_performer = {}
 for row in session.query(Performer):
     id = row.id
     name = row.name
+    name = row.name.strip().title()
     if name not in performer_id and "Keressük " not in name:
         performer_id[name] = id
         id_performer[id] = name
@@ -144,6 +148,7 @@ person_uri = {}
 for row in session.query(Person):
     id = row.id
     name = row.name
+    name = row.name.strip().title()
     uri = row.uri
     if name not in person_id and "Keressük " not in name:
         person_id[name] = id
@@ -214,7 +219,70 @@ for k, v in ppl_edges_wieghted.items():
     G.add_edge(k[0], k[1], weight=v)
 
 nx.write_graphml(G, "data/ppl.graphml")
-# 3 link persons to performers, authors and composers
-# 4 generate a graph which links ppl through songs
-# 5 make a language model for songs
-# 6 generate a graph which links songs through ppl
+
+###############################################################################
+#####                         Song graphs                                 #####
+###############################################################################
+song_nodes = set()
+song_edges = []
+for id in id_song:
+    
+    song_title = id_song[id]
+    song_authors = [e[1] for e in author2song if e[0] == id]
+    authors_songs = [e[0] for e in author2song if e[1] in song_authors]
+    if authors_songs:
+        authors_titles = [id_song[e] for e in authors_songs]
+    else:
+        authors_titles = []
+
+    song_composers = [e[1] for e in composer2song if e[0] == id]
+    composers_songs = [e[0] for e in composer2song if e[1] in song_composers]
+    if composers_songs:
+        composers_titles = [id_song[e] for e in composers_songs]
+    else:
+        composers_titles = []
+
+    song_performers = [e[1] for e in performer2song if e[0] == id]
+    performers_songs = [e[0] for e in performer2song if e[1] in song_performers]
+    if performers_songs:
+        performers_titles = [id_song[e] for e in performers_songs]
+    else:
+        performers_titles = []
+
+    all_contributors = authors_titles + composers_titles + performers_titles
+    all_contributors = set(all_contributors)
+    song_nodes.update(all_contributors)
+    song_nodes.add(song_title)
+    for title in sorted(all_contributors):
+        t = tuple(sorted([song_title, title]))
+        song_edges.append(t)
+
+song_edges_weighted = Counter(song_edges)
+sorted_edges = sorted(song_edges_weighted.items(), key=operator.itemgetter(1), reverse=True)
+
+G2 = nx.Graph()
+
+for e in sorted_edges:
+    nodes, weight = e[0], e[1]
+    n1, n2 = nodes[0], nodes[1]
+    if weight > 1 and n1 != n2:
+        G2.add_edge(n1, n2, weight=weight)
+        G2.add_node(n1)
+        G2.add_node(n2)
+
+G3 = nx.Graph()
+filtered_nodes = []
+for e in G2.degree:
+    if e[1] > 200:
+        filtered_nodes.append(e[0])
+
+for e in sorted_edges:
+    nodes, weight = e[0], e[1]
+    n1, n2 = nodes[0], nodes[1]
+    if n1 in filtered_nodes and n2 in filtered_nodes:
+        t = sorted([n1, n2])
+        G3.add_node(n1)
+        G3.add_node(n2)
+        G3.add_edge(t[0], t[1])
+
+nx.write_graphml(G3, "data/songs.graphml")
