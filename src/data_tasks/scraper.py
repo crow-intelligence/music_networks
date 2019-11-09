@@ -200,7 +200,7 @@ def band_link_processor(song_link, band_name):
         eloado = []
         szovegirok = []
         zeneszerzok = []
-        megejelnes = 0
+        megjelenes = 0
         for song_info in song_infos:
             song_table = BeautifulSoup(str(song_info), "lxml")
             table = song_table.find("table")
@@ -222,10 +222,8 @@ def band_link_processor(song_link, band_name):
                     zeneszerzok.extend(composers)
                 if "Megjelenés" in d:
                     year = d["Megjelenés"]
-                    try:
-                        megjelenes = int(year)
-                    except Exception as e:
-                        megjelenes = 0
+                    megjelenes = int(year)
+
         if not eloado:
             eloado = [band_name]
         if not szovegirok:
@@ -234,7 +232,7 @@ def band_link_processor(song_link, band_name):
             zeneszerzok = [band_name]
         song2year_query = session.query(Song2Year).filter_by(songid=songid).first()
         if not song2year_query:
-            song2year_entry = Song2Year(songid=songid, year=megejelnes)
+            song2year_entry = Song2Year(songid=songid, year=megjelenes)
             session.add(song2year_entry)
             session.commit()
 
