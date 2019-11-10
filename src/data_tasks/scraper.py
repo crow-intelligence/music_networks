@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Unico
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from src.data_tasks.requests_with_proxies import request_with_proxy
 
@@ -156,7 +157,8 @@ class Composer2Song(Base):
 
 
 # create engine
-engine = create_engine(db, echo=False)
+engine = create_engine(db,
+                       echo=False)
 Base.metadata.create_all(engine)
 
 
@@ -179,7 +181,9 @@ def band_link_processor(song_link, band_name):
         song_title = song_title.split(":")[1]
         song_title = song_title.replace(" dalszöveg, videó - Zeneszöveg.hu", "")
         song_title = song_title.replace(" dalszöveg - Zeneszöveg.hu", "")
-        song_title = song_title.strip()
+        song_title = song_title.strip().split()
+        song_title = [wd.strip().lower() for wd in song_title]
+        song_title = " ".join(song_title)
         song_title = band_name.strip() + "|" + song_title
         print(song_title)
         song_text = song_soup.find_all("div", class_="lyrics-plain-text")
@@ -252,6 +256,9 @@ def band_link_processor(song_link, band_name):
                 ea = ea.replace(aka, "")
             else:
                 aka = "None"
+            ea = ea.strip().split()
+            ea = [wd.strip().lower() for wd in ea]
+            ea = " ".join(ea)
             # performer
             performer_query = (
                 session.query(Performer).filter_by(name=ea).first()
@@ -288,6 +295,9 @@ def band_link_processor(song_link, band_name):
                 zs = zs.replace(aka, "")
             else:
                 aka = "None"
+            zs = zs.strip().split()
+            zs = [wd.strip().lower() for wd in zs]
+            zs = " ".join(zs)
             # composer
             zeneszerzo_query = (
                 session.query(Composer).filter_by(name=zs).first()
@@ -319,6 +329,9 @@ def band_link_processor(song_link, band_name):
                 author = author.replace(aka, "")
             else:
                 aka = "None"
+            author = author.strip().split()
+            author = [wd.strip().lower() for wd in author]
+            author = " ".join(author)
             author_query = session.query(Author).filter_by(name=author).first()
 
             if not author_query:
@@ -342,6 +355,9 @@ def band_link_processor(song_link, band_name):
         pass
 
 
+scrapedlinks = set()
+
+
 for ch in starting_pages:
     print("XXXXXXXXXXXXXXXXXXXXXXXXXXXX", ch)
     session_factory = sessionmaker(bind=engine)
@@ -357,9 +373,14 @@ for ch in starting_pages:
         links = soup.find_all("a")
         for link in links:
             if "href" in link.attrs:
-                if link["href"].startswith("egyuttes/"):
+                if link["href"].startswith("egyuttes/") and link["href"] not\
+                        in scrapedlinks:
                     if link["href"] not in stoplist:
-                        band_name = link.text.strip()
+                        scrapedlinks.add(link["href"]) # elvileg így nem
+                        # megy végig mégegyszer a kiemelt előadókon
+                        band_name = link.text.strip().split()
+                        band_name = [wd.strip().lower() for wd in band_name]
+                        band_name = " ".join(band_name)
                         band_page = prefix + link["href"]
                         normalized_name = link["href"].split("/")[-1].replace("-dalszovegei.html", "")
                         print(band_page)
