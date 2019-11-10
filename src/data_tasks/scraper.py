@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Unico
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.interfaces import PoolListener
 
 from src.data_tasks.requests_with_proxies import request_with_proxy
 
@@ -156,9 +156,17 @@ class Composer2Song(Base):
     composerid = Column(Integer, ForeignKey("composer.id"))
 
 
+class MyListener(PoolListener):
+    def connect(self, dbapi_con, con_record):
+        dbapi_con.execute('pragma journal_mode=WAL')
+        dbapi_con.execute('PRAGMA synchronous=OFF')
+        dbapi_con.execute('PRAGMA cache_size=100000')
+
+
 # create engine
 engine = create_engine(db,
-                       echo=False)
+                       echo=False,
+                       listeners=[MyListener()])
 Base.metadata.create_all(engine)
 
 
