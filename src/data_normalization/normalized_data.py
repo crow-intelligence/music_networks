@@ -3,6 +3,7 @@ from collections import Counter
 from itertools import combinations
 
 import networkx as nx
+from sklearn.preprocessing import minmax_scale
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, UnicodeText
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session
@@ -156,7 +157,7 @@ for row in session.query(Person):
         person_uri[name] = uri
 
 ###############################################################################
-#####                         Song graphs                                 #####
+#####                       Person graphs                                 #####
 ###############################################################################
 author2song = []
 for row in session.query(Author2Song):
@@ -214,9 +215,32 @@ G = nx.Graph()
 for node in ppl_nodes:
     G.add_node(node)
 
+pr = nx.pagerank(G)
+rnodes = list(pr.keys())
+rescaled_pr = list(pr.values())
+rescaled_pr = list(minmax_scale(rescaled_pr, [0, 1]))
+pr_rescaled = dict(zip(rnodes, rescaled_pr))
+
 ppl_edges_wieghted = Counter(ppl_edges)
 for k, v in ppl_edges_wieghted.items():
     G.add_edge(k[0], k[1], weight=v)
+
+with open("data/nodes.tsv", "w") as f:
+    for node in G.nodes:
+        if pr_rescaled[node] > 0.0:
+            o = node + "\t" + str(pr_rescaled[node]) + "\n"
+            f.write(o)
+
+ppl_edge_weights = list(ppl_edges_wieghted.values())
+ppl_edges_weights_rescaled = list(minmax_scale(ppl_edge_weights, [0,1]))
+ppl_edges = list(ppl_edges_wieghted.keys())
+ppl_edges_weighted_rescaled = dict(zip(ppl_edges, ppl_edges_weights_rescaled))
+
+with open("data/edges.tsv", "w") as f:
+    for k,v in ppl_edges_weighted_rescaled.items():
+        if v > 0.0:
+            o = k[0] + "\t" + k[1] + "\t" + str(v) + "\n"
+            f.write(o)
 
 nx.write_graphml(G, "data/ppl.graphml")
 
@@ -226,26 +250,25 @@ nx.write_graphml(G, "data/ppl.graphml")
 song_nodes = set()
 song_edges = []
 for id in id_song:
-    
-    song_title = id_song[id]
+    song_title = id_song[id].split("|")[0]
     song_authors = [e[1] for e in author2song if e[0] == id]
     authors_songs = [e[0] for e in author2song if e[1] in song_authors]
     if authors_songs:
-        authors_titles = [id_song[e] for e in authors_songs]
+        authors_titles = [id_song[e].split("|")[0] for e in authors_songs]
     else:
         authors_titles = []
 
     song_composers = [e[1] for e in composer2song if e[0] == id]
     composers_songs = [e[0] for e in composer2song if e[1] in song_composers]
     if composers_songs:
-        composers_titles = [id_song[e] for e in composers_songs]
+        composers_titles = [id_song[e].split("|")[0] for e in composers_songs]
     else:
         composers_titles = []
 
     song_performers = [e[1] for e in performer2song if e[0] == id]
     performers_songs = [e[0] for e in performer2song if e[1] in song_performers]
     if performers_songs:
-        performers_titles = [id_song[e] for e in performers_songs]
+        performers_titles = [id_song[e].split("|")[0] for e in performers_songs]
     else:
         performers_titles = []
 
@@ -265,24 +288,21 @@ G2 = nx.Graph()
 for e in sorted_edges:
     nodes, weight = e[0], e[1]
     n1, n2 = nodes[0], nodes[1]
-    if weight > 1 and n1 != n2:
+    if n1 != n2:
         G2.add_edge(n1, n2, weight=weight)
         G2.add_node(n1)
         G2.add_node(n2)
 
 G3 = nx.Graph()
-filtered_nodes = []
-for e in G2.degree:
-    if e[1] > 200:
-        filtered_nodes.append(e[0])
+filtered_nodes = set([e[0] for e in list(G2.degree) if e[1] > 300])
+filtered_edges = [e[0] for e in sorted_edges if e[0][0] in filtered_nodes and e[0][1] in filtered_nodes]
+print(len(filtered_edges))
 
-for e in sorted_edges:
-    nodes, weight = e[0], e[1]
-    n1, n2 = nodes[0], nodes[1]
-    if n1 in filtered_nodes and n2 in filtered_nodes:
-        t = sorted([n1, n2])
-        G3.add_node(n1)
-        G3.add_node(n2)
-        G3.add_edge(t[0], t[1])
+for e in filtered_edges:
+    n1, n2 = e[0], e[1]
+    t = sorted([n1, n2])
+    G3.add_node(n1)
+    G3.add_node(n2)
+    G3.add_edge(t[0], t[1])
 
 nx.write_graphml(G3, "data/songs.graphml")
