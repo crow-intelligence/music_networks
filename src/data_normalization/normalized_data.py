@@ -215,30 +215,33 @@ G = nx.Graph()
 for node in ppl_nodes:
     G.add_node(node)
 
+ppl_edges_weighted = Counter(ppl_edges)
+for k, v in ppl_edges_weighted.items():
+    G.add_edge(k[0], k[1], weight=v)
+
 pr = nx.pagerank(G)
 rnodes = list(pr.keys())
 rescaled_pr = list(pr.values())
 rescaled_pr = list(minmax_scale(rescaled_pr, [0, 1]))
 pr_rescaled = dict(zip(rnodes, rescaled_pr))
 
-ppl_edges_wieghted = Counter(ppl_edges)
-for k, v in ppl_edges_wieghted.items():
-    G.add_edge(k[0], k[1], weight=v)
+
+giant = list(max(nx.connected_components(G), key=len))
 
 with open("data/nodes.tsv", "w") as f:
-    for node in G.nodes:
+    for node in giant:
         if pr_rescaled[node] > 0.0:
             o = node + "\t" + str(pr_rescaled[node]) + "\n"
             f.write(o)
 
-ppl_edge_weights = list(ppl_edges_wieghted.values())
+ppl_edge_weights = list(ppl_edges_weighted.values())
 ppl_edges_weights_rescaled = list(minmax_scale(ppl_edge_weights, [0,1]))
-ppl_edges = list(ppl_edges_wieghted.keys())
+ppl_edges = list(ppl_edges_weighted.keys())
 ppl_edges_weighted_rescaled = dict(zip(ppl_edges, ppl_edges_weights_rescaled))
 
 with open("data/edges.tsv", "w") as f:
     for k,v in ppl_edges_weighted_rescaled.items():
-        if v > 0.0:
+        if v > 0.0 and k[0] in giant and k[1] in giant:
             o = k[0] + "\t" + k[1] + "\t" + str(v) + "\n"
             f.write(o)
 

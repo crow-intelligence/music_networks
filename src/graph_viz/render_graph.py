@@ -7,7 +7,7 @@ with open("data/nodes.tsv", "r") as f:
     for l in f:
         node, pr = l.strip().split("\t")
         pr = float(pr)
-        if pr > 0.024:
+        if pr > 0.013:
             nodes[node] = pr
             nodelist.append(node)
 
