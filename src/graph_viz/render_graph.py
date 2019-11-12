@@ -7,16 +7,15 @@ with open("data/nodes.tsv", "r") as f:
     for l in f:
         node, pr = l.strip().split("\t")
         pr = float(pr)
-        if pr > 0.013:
-            nodes[node] = pr
-            nodelist.append(node)
+        nodes[node] = pr
+        nodelist.append(node)
 
 edges = []
 with open("data/edges.tsv", "r") as f:
     for l in f:
-        fromid, toid, w = l.strip().split("\t")
+        fromid, toid = l.strip().split("\t")
         if fromid in nodes and toid in nodes:
-            t = (fromid, toid, float(w))
+            t = (fromid, toid)
             edges.append(t)
 
 g = igraph.Graph()
@@ -24,7 +23,7 @@ for n,p in nodes.items():
     g.add_vertex(n, pr=p)
 
 for e in edges:
-    g.add_edge(e[0], e[1], weight=e[2])
+    g.add_edge(e[0], e[1])
 
 l = g.layout_fruchterman_reingold_3d()
 
@@ -54,12 +53,12 @@ with open("data/node_coords.tsv", "w") as f:
 
 with open("data/edge_coords.tsv", "w") as f:
     for e in edges:
-        n1, n2, w = e[0], e[1], e[2]
+        n1, n2 = e[0], e[1]
         coord1 = list(node_coord[n1])
         coord2 = list(node_coord[n2])
         coord1 = [str(i) for i in coord1]
         coord2 = [str(i) for i in coord2]
         coord1 = "\t".join(coord1)
         coord2 = "\t".join(coord2)
-        o = coord1 + "\t" + coord2 + "\t" + str(w) + "\n"
+        o = coord1 + "\t" + coord2 + "\n"
         f.write(o)

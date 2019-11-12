@@ -13,8 +13,7 @@ with open("data/node_coords.tsv", "r") as f:
 with open("data/edge_coords.tsv", "r") as f:
     for l in f:
         l = l.strip()
-        x1, y1, z1, x2, y2, z2, w = l.split("\t")
-        w = float(w)
+        x1, y1, z1, x2, y2, z2 = l.split("\t")
         x1 = int(float(x1))
         y1 = int(float(y1))
         z1 = int(float(z1))
@@ -27,7 +26,7 @@ with open("data/edge_coords.tsv", "r") as f:
         obj.data.fill_mode = 'FULL'
         location1 = (x1, y1, z1)
         location2 = (x2, y2, z2)
-        obj.data.bevel_depth = w
+        obj.data.bevel_depth = 2
         obj.data.bevel_resolution = 4
         # set first point to centre of sphere1
         obj.data.splines[0].bezier_points[0].co = location1
