@@ -25,13 +25,13 @@ for n,p in nodes.items():
 for e in edges:
     g.add_edge(e[0], e[1])
 
-l = g.layout_fruchterman_reingold_3d()
-
+#l = g.layout_fruchterman_reingold_3d()
+l = g.layout_kamada_kawai_3d()
 coords = []
 for c in l:
     coords.append(c)
 
-scaler = MinMaxScaler(feature_range=(-100, 100))
+scaler = MinMaxScaler(feature_range=(-300, 300))
 scaler.fit(coords)
 rescaled_coords = scaler.transform(coords)
 

@@ -15,7 +15,7 @@ for e in G.edges:
         G_filtered.add_edge(e[0], e[1])
 
 pr = nx.pagerank(G_filtered)
-sorted_pr = sorted(pr.items(), key=operator.itemgetter(1), reverse=True)[:1000]
+sorted_pr = sorted(pr.items(), key=operator.itemgetter(1), reverse=True)[:100]
 final_nodes = [e[0] for e in sorted_pr]
 prs = [e[1] for e in sorted_pr]
 prs_rescaled = minmax_scale(prs, [0, 1])
