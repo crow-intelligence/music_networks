@@ -61,7 +61,7 @@ for ch in initials:
         range_end = [e for e in range_end if "Utolsó" in e.text][0]
         range_end = int(range_end["href"].split("=")[1])
         if range_end > 1:
-            for j in range(2, range_end+1):
+            for j in range(2, range_end + 1):
                 t = f"{ch}&page={j}"
                 print(t)
                 starting_pages.append(t)
@@ -158,15 +158,13 @@ class Composer2Song(Base):
 
 class MyListener(PoolListener):
     def connect(self, dbapi_con, con_record):
-        dbapi_con.execute('pragma journal_mode=WAL')
-        dbapi_con.execute('PRAGMA synchronous=OFF')
-        dbapi_con.execute('PRAGMA cache_size=100000')
+        dbapi_con.execute("pragma journal_mode=WAL")
+        dbapi_con.execute("PRAGMA synchronous=OFF")
+        dbapi_con.execute("PRAGMA cache_size=100000")
 
 
 # create engine
-engine = create_engine(db,
-                       echo=False,
-                       listeners=[MyListener()])
+engine = create_engine(db, echo=False, listeners=[MyListener()])
 Base.metadata.create_all(engine)
 
 
@@ -196,9 +194,7 @@ def band_link_processor(song_link, band_name):
         print(song_title)
         song_text = song_soup.find_all("div", class_="lyrics-plain-text")
         song_text = [s.text for s in song_text][0]
-        song_infos = song_soup.find_all(
-            "div", {"class": "lyrics-header-text short"}
-        )
+        song_infos = song_soup.find_all("div", {"class": "lyrics-header-text short"})
         songy = session.query(Song).filter_by(title=song_title).first()
         if not songy:
             song_entry = Song(title=song_title, lyrics=song_text)
@@ -268,9 +264,7 @@ def band_link_processor(song_link, band_name):
             ea = [wd.strip().lower() for wd in ea]
             ea = " ".join(ea)
             # performer
-            performer_query = (
-                session.query(Performer).filter_by(name=ea).first()
-            )
+            performer_query = session.query(Performer).filter_by(name=ea).first()
             if not performer_query:
                 performer_entry = Performer(name=ea, aka=aka)
                 session.add(performer_entry)
@@ -307,9 +301,7 @@ def band_link_processor(song_link, band_name):
             zs = [wd.strip().lower() for wd in zs]
             zs = " ".join(zs)
             # composer
-            zeneszerzo_query = (
-                session.query(Composer).filter_by(name=zs).first()
-            )
+            zeneszerzo_query = session.query(Composer).filter_by(name=zs).first()
             if not zeneszerzo_query:
                 zeneszerzo_entry = Composer(name=zs, aka=aka)
                 session.add(zeneszerzo_entry)
@@ -320,9 +312,7 @@ def band_link_processor(song_link, band_name):
             else:
                 zeneszerzo_id = zeneszerzo_query.id
             # composer2song
-            composer2song_entry = Composer2Song(
-                songid=songid, composerid=zeneszerzo_id
-            )
+            composer2song_entry = Composer2Song(songid=songid, composerid=zeneszerzo_id)
             session.add(composer2song_entry)
             session.commit()
 
@@ -381,16 +371,20 @@ for ch in starting_pages:
         links = soup.find_all("a")
         for link in links:
             if "href" in link.attrs:
-                if link["href"].startswith("egyuttes/") and link["href"] not\
-                        in scrapedlinks:
+                if (
+                    link["href"].startswith("egyuttes/")
+                    and link["href"] not in scrapedlinks
+                ):
                     if link["href"] not in stoplist:
-                        scrapedlinks.add(link["href"]) # elvileg így nem
+                        scrapedlinks.add(link["href"])  # elvileg így nem
                         # megy végig mégegyszer a kiemelt előadókon
                         band_name = link.text.strip().split()
                         band_name = [wd.strip().lower() for wd in band_name]
                         band_name = " ".join(band_name)
                         band_page = prefix + link["href"]
-                        normalized_name = link["href"].split("/")[-1].replace("-dalszovegei.html", "")
+                        normalized_name = (
+                            link["href"].split("/")[-1].replace("-dalszovegei.html", "")
+                        )
                         print(band_page)
                         # header = {"User-Agent": ua.random}
                         try:
@@ -398,9 +392,19 @@ for ch in starting_pages:
                             # band_html = requests.get(band_page, headers=header).text
                             band_soup = BeautifulSoup(band_html, "lxml")
                             band_links = band_soup.find_all("a")
-                            song_links = [link["href"] for link in band_links if "href" in link.attrs]
-                            song_links = [link for link in song_links if normalized_name in link]
-                            song_links = [link for link in song_links if link.startswith("dalszoveg")]
+                            song_links = [
+                                link["href"]
+                                for link in band_links
+                                if "href" in link.attrs
+                            ]
+                            song_links = [
+                                link for link in song_links if normalized_name in link
+                            ]
+                            song_links = [
+                                link
+                                for link in song_links
+                                if link.startswith("dalszoveg")
+                            ]
                             members = [
                                 l
                                 for l in band_links
@@ -430,7 +434,9 @@ for ch in starting_pages:
                                 max_workers=len(song_links)
                             ) as executor:
                                 for song_link in song_links:
-                                    executor.submit(band_link_processor, song_link, band_name)
+                                    executor.submit(
+                                        band_link_processor, song_link, band_name
+                                    )
                                 # executor.map(band_link_processor, song_links)
                             time.sleep(1)
                         except Exception as e:

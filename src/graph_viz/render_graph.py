@@ -1,3 +1,5 @@
+from collections import Counter
+
 import igraph
 from sklearn.preprocessing import MinMaxScaler
 
@@ -13,25 +15,25 @@ with open("data/nodes.tsv", "r") as f:
 edges = []
 with open("data/edges.tsv", "r") as f:
     for l in f:
-        fromid, toid = l.strip().split("\t")
+        fromid, toid, w = l.strip().split("\t")
         if fromid in nodes and toid in nodes:
-            t = (fromid, toid)
+            t = (fromid, toid, w)
             edges.append(t)
 
 g = igraph.Graph()
-for n,p in nodes.items():
+for n, p in nodes.items():
     g.add_vertex(n, pr=p)
 
 for e in edges:
-    g.add_edge(e[0], e[1])
+    g.add_edge(e[0], e[1], weight=e[2])
 
-#l = g.layout_fruchterman_reingold_3d()
-l = g.layout_kamada_kawai_3d()
+l = g.layout_fruchterman_reingold_3d()
+#l = g.layout_kamada_kawai_3d()
 coords = []
 for c in l:
     coords.append(c)
 
-scaler = MinMaxScaler(feature_range=(-300, 300))
+scaler = MinMaxScaler(feature_range=(-500, 500))
 scaler.fit(coords)
 rescaled_coords = scaler.transform(coords)
 
@@ -53,12 +55,13 @@ with open("data/node_coords.tsv", "w") as f:
 
 with open("data/edge_coords.tsv", "w") as f:
     for e in edges:
-        n1, n2 = e[0], e[1]
-        coord1 = list(node_coord[n1])
-        coord2 = list(node_coord[n2])
-        coord1 = [str(i) for i in coord1]
-        coord2 = [str(i) for i in coord2]
-        coord1 = "\t".join(coord1)
-        coord2 = "\t".join(coord2)
-        o = coord1 + "\t" + coord2 + "\n"
-        f.write(o)
+        n1, n2, we = e[0], e[1], e[2]
+        if n1 in node_coord and n2 in node_coord:
+            coord1 = list(node_coord[n1])
+            coord2 = list(node_coord[n2])
+            coord1 = [str(i) for i in coord1]
+            coord2 = [str(i) for i in coord2]
+            coord1 = "\t".join(coord1)
+            coord2 = "\t".join(coord2)
+            o = coord1 + "\t" + coord2 + "\t" + we + "\n"
+            f.write(o)
