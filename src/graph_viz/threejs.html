@@ -1,0 +1,81 @@
+<html>
+
+<head>
+    <title>My first three.js app</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%
+        }
+
+    </style>
+</head>
+
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
+    <script>
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        var renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // make a function
+        var geometry = new THREE.SphereGeometry(0.3, 32, 32);
+        var material = new THREE.MeshBasicMaterial({
+            color: 0x00ff00
+        });
+        var cube = new THREE.Mesh(geometry, material);
+        cube.position.x = 2;
+        cube.position.y = 1;
+        cube.position.z = 1;
+        scene.add(cube);
+        camera.position.z = 10;
+        var cube = new THREE.Mesh(geometry, material);
+        cube.position.x = 5;
+        cube.position.y = 1;
+        cube.position.z = 1;
+        scene.add(cube);
+
+        scene.add(cube);
+
+        var cube = new THREE.Mesh(geometry, material);
+        cube.position.x = 5;
+        cube.position.y = -5;
+        cube.position.z = 1;
+        scene.add(cube);
+
+        scene.add(cube);
+
+        var geometry = new THREE.CylinderGeometry(0.2, 0.2, 3, 10);
+        var material = new THREE.MeshBasicMaterial({
+            color: 0xffff00
+        });
+        var cylinder = new THREE.Mesh(geometry, material);
+        cylinder.position.x = 3.36; // sphere.x-(2*sphere-radius)
+        cylinder.position.y = 1;
+        cylinder.position.z = 1;
+        scene.add(cylinder);
+        cylinder.rotation.z = Math.PI/2; 
+        
+        
+        var animate = function() {
+            requestAnimationFrame(animate);
+
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+
+            renderer.render(scene, camera);
+        };
+
+        animate();
+
+    </script>
+</body>
+
+</html>
