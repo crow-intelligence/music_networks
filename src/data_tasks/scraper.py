@@ -85,7 +85,6 @@ stoplist = ["egyuttes/uj.html", "szemely/uj.html"]
 ###############################################################################
 #####                               DB                                    #####
 ###############################################################################
-db = "sqlite:///teszt.db"
 Base = declarative_base()
 
 
@@ -95,7 +94,7 @@ class Song(Base):
     id = Column(Integer, primary_key=True)
     lyrics = Column(UnicodeText)
     title = Column(String(1000))
-    UniqueConstraint(id, lyrics, title)
+    UniqueConstraint(lyrics, title, name="UniqueSong")
 
 
 class Song2Year(Base):
@@ -103,7 +102,7 @@ class Song2Year(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     year = Column(Integer)
-    UniqueConstraint(id, songid, year)
+    UniqueConstraint(songid, year, name="UiqueS2y")
 
 
 class Song2Title(Base):
@@ -111,7 +110,7 @@ class Song2Title(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     songtitle = Column(String(2000))
-    UniqueConstraint(id, songid, songtitle)
+    UniqueConstraint(songtitle, name="UniqueS2T")
 
 
 class Composer(Base):
@@ -119,7 +118,7 @@ class Composer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     aka = Column(String(400))
-    UniqueConstraint(id, name, aka)
+    UniqueConstraint(name, aka, name="UniqueComposer")
 
 
 class Author(Base):
@@ -127,7 +126,7 @@ class Author(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     aka = Column(String(400))
-    UniqueConstraint(id, name, aka)
+    UniqueConstraint(name, aka, name="UniqueAuthor")
 
 
 class Performer(Base):
@@ -135,7 +134,7 @@ class Performer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     aka = Column(String(400))
-    UniqueConstraint(id, name, aka)
+    UniqueConstraint(name, aka, name="UniquePerformer")
 
 
 class Person(Base):
@@ -143,7 +142,7 @@ class Person(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     uri = Column(String(400))
-    UniqueConstraint(id, name, uri)
+    UniqueConstraint(name, uri, name="UniquePerson")
 
 
 class Person2Performer(Base):
@@ -151,7 +150,7 @@ class Person2Performer(Base):
     id = Column(Integer, primary_key=True)
     performerid = Column(Integer, ForeignKey("performer.id"))
     personid = Column(Integer, ForeignKey("person.id"))
-    UniqueConstraint(id, performerid, personid)
+    UniqueConstraint(performerid, personid, name="UniqueP2P")
 
 
 class Performer2Song(Base):
@@ -159,7 +158,7 @@ class Performer2Song(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     performerid = Column(Integer, ForeignKey("performer.id"))
-    UniqueConstraint(id, songid, performerid)
+    UniqueConstraint(songid, performerid, name="UniqueP2S")
 
 
 class Author2Song(Base):
@@ -167,7 +166,7 @@ class Author2Song(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     authorid = Column(Integer, ForeignKey("author.id"))
-    UniqueConstraint(id, songid, authorid)
+    UniqueConstraint(songid, authorid, name="UniqueA2S")
 
 
 class Composer2Song(Base):
@@ -175,18 +174,28 @@ class Composer2Song(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     composerid = Column(Integer, ForeignKey("composer.id"))
-    UniqueConstraint(id, songid, composerid)
+    UniqueConstraint(songid, composerid, name="UniqueC2S")
 
 
 # db type, dialect, auth, location, port, dbname
 user = "root"
-password = "qwerty"
+password = "secret"
+#host = "127.0.0.1"
 host = "localhost"
 port = 3306
 dbname = "music_hu"
-
+db = f"mysql+pymysql://{user}:{password}@{host}:{port}/{dbname}"
 # create engine
-engine = create_engine(db, pool_recycle=10, echo=False)
+engine = create_engine(
+    db,
+    pool_recycle=10,
+    echo=False,
+    pool_size=100,
+    max_overflow=20,
+    encoding="utf-8",
+    convert_unicode=True,
+    connect_args={"connect_timeout": 150},
+)
 Base.metadata.create_all(engine)
 
 
@@ -453,7 +462,7 @@ for ch in starting_pages:
                                     memberid = member_query.id
                                 members2add.append(memberid)
                             with ThreadPoolExecutor(
-                                max_workers=300
+                                max_workers=100
                             ) as executor:
                                 for song_link in song_links:
                                     executor.submit(
