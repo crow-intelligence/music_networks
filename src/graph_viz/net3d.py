@@ -185,7 +185,7 @@ class netSimple:
         ex = self.params["pow"]
         r = self.params["n_radius"]
         self.F_NN = (
-            A * self.dp / r * (self.dpn / r) ** (ex - 2) * exp(-(self.dpn / r) ** ex)
+            A * self.dp / r * (self.dpn / r) ** (ex - 2) * exp(-((self.dpn / r) ** ex))
         )
 
     def comp_F_NL(self):
@@ -246,7 +246,7 @@ class netRads(netSimple):
             * self.dp
             * r ** POW_SN
             * (self.dpn / r) ** (ex - 2)
-            * exp(-(self.dpn / r) ** ex)
+            * exp(-((self.dpn / r) ** ex))
         )
         # this should automatically solve any issue from strong elastic forces
 
@@ -981,7 +981,7 @@ class NetNodes:
             * r
             * tf.expand_dims(
                 (rlen / th) ** (nodes.net.POWn - 2)
-                * tf.exp(-(rlen / th) ** nodes.net.POWn),
+                * tf.exp(-((rlen / th) ** nodes.net.POWn)),
                 2,
             )
         )
@@ -1167,7 +1167,7 @@ class NetLinks:
             * drh
             * (
                 (dr2 ** (links.net.POW / 2.0 - 1))
-                * tf.exp(-dr2 ** (links.net.POW / 2.0))
+                * tf.exp(-(dr2 ** (links.net.POW / 2.0)))
             )
         )
         links.Force_LL_Ell = tf.reduce_sum(links.fmat0, 0)
@@ -1218,7 +1218,7 @@ class NetLinks:
             * (
                 (rlen / th_mat) ** (links.net.POW - 2)
                 / th_mat
-                * tf.exp(-(rlen / th_mat) ** links.net.POW)
+                * tf.exp(-((rlen / th_mat) ** links.net.POW))
                 * links.link_self_mask_multi(idx)
             )[:, :, newaxis]
         )

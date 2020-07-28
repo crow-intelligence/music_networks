@@ -2,20 +2,28 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, UnicodeText
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    ForeignKey,
+    UnicodeText,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.interfaces import PoolListener
-
-from src.data_tasks.requests_with_proxies import request_with_proxy
+#from sqlalchemy.interfaces import PoolListener
+# from src.data_tasks.requests_with_proxies import request_with_proxy
 
 ###############################################################################
 #####                                Setup                                #####
 ###############################################################################
-ua = UserAgent()
+ua = UserAgent(verify_ssl=False)
 
 prefix = "http://www.zeneszoveg.hu/"
 base_url = "http://www.zeneszoveg.hu/eloadok/"
@@ -54,7 +62,10 @@ for ch in initials:
     url = base_url + ch
     header = {"User-Agent": ua.random}
     try:
-        html = request_with_proxy(url)
+        # html = request_with_proxy(url)
+        html = requests.get(
+            url, headers=header
+        ).text
         starting_pages.append(ch)
         soup = BeautifulSoup(html, "lxml")
         range_end = soup.find_all("a", {"class": "pgPassive"})
@@ -84,6 +95,7 @@ class Song(Base):
     id = Column(Integer, primary_key=True)
     lyrics = Column(UnicodeText)
     title = Column(String(1000))
+    UniqueConstraint(id, lyrics, title)
 
 
 class Song2Year(Base):
@@ -91,6 +103,7 @@ class Song2Year(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     year = Column(Integer)
+    UniqueConstraint(id, songid, year)
 
 
 class Song2Title(Base):
@@ -98,6 +111,7 @@ class Song2Title(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     songtitle = Column(String(2000))
+    UniqueConstraint(id, songid, songtitle)
 
 
 class Composer(Base):
@@ -105,6 +119,7 @@ class Composer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     aka = Column(String(400))
+    UniqueConstraint(id, name, aka)
 
 
 class Author(Base):
@@ -112,6 +127,7 @@ class Author(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     aka = Column(String(400))
+    UniqueConstraint(id, name, aka)
 
 
 class Performer(Base):
@@ -119,6 +135,7 @@ class Performer(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     aka = Column(String(400))
+    UniqueConstraint(id, name, aka)
 
 
 class Person(Base):
@@ -126,6 +143,7 @@ class Person(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400))
     uri = Column(String(400))
+    UniqueConstraint(id, name, uri)
 
 
 class Person2Performer(Base):
@@ -133,6 +151,7 @@ class Person2Performer(Base):
     id = Column(Integer, primary_key=True)
     performerid = Column(Integer, ForeignKey("performer.id"))
     personid = Column(Integer, ForeignKey("person.id"))
+    UniqueConstraint(id, performerid, personid)
 
 
 class Performer2Song(Base):
@@ -140,6 +159,7 @@ class Performer2Song(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     performerid = Column(Integer, ForeignKey("performer.id"))
+    UniqueConstraint(id, songid, performerid)
 
 
 class Author2Song(Base):
@@ -147,6 +167,7 @@ class Author2Song(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     authorid = Column(Integer, ForeignKey("author.id"))
+    UniqueConstraint(id, songid, authorid)
 
 
 class Composer2Song(Base):
@@ -154,17 +175,18 @@ class Composer2Song(Base):
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
     composerid = Column(Integer, ForeignKey("composer.id"))
+    UniqueConstraint(id, songid, composerid)
 
 
-class MyListener(PoolListener):
-    def connect(self, dbapi_con, con_record):
-        dbapi_con.execute("pragma journal_mode=WAL")
-        dbapi_con.execute("PRAGMA synchronous=OFF")
-        dbapi_con.execute("PRAGMA cache_size=100000")
-
+# db type, dialect, auth, location, port, dbname
+user = "root"
+password = "qwerty"
+host = "localhost"
+port = 3306
+dbname = "music_hu"
 
 # create engine
-engine = create_engine(db, echo=False, listeners=[MyListener()])
+engine = create_engine(db, pool_recycle=10, echo=False)
 Base.metadata.create_all(engine)
 
 
@@ -175,13 +197,13 @@ def band_link_processor(song_link, band_name):
     session_factory = sessionmaker(bind=engine)
     Session = scoped_session(session_factory)
     session = Session()
-    # header = {"User-Agent": ua.random}
+    header = {"User-Agent": ua.random}
     song_url = prefix + song_link
     try:
-        song_html = request_with_proxy(song_url)
-        # song_html = requests.get(
-        #     song_url, headers=header
-        # ).text
+        # song_html = request_with_proxy(song_url)
+        song_html = requests.get(
+            song_url, headers=header
+        ).text
         song_soup = BeautifulSoup(song_html, "lxml")
         song_title = song_soup.find_all("title")[0].text
         song_title = song_title.split(":")[1]
@@ -365,8 +387,8 @@ for ch in starting_pages:
     url = base_url + ch
     header = {"User-Agent": ua.random}
     try:
-        html = request_with_proxy(url)
-        # html = requests.get(url, headers=header).text
+        # html = request_with_proxy(url)
+        html = requests.get(url, headers=header).text
         soup = BeautifulSoup(html, "lxml")
         links = soup.find_all("a")
         for link in links:
@@ -386,10 +408,10 @@ for ch in starting_pages:
                             link["href"].split("/")[-1].replace("-dalszovegei.html", "")
                         )
                         print(band_page)
-                        # header = {"User-Agent": ua.random}
+                        header = {"User-Agent": ua.random}
                         try:
-                            band_html = request_with_proxy(band_page)
-                            # band_html = requests.get(band_page, headers=header).text
+                            # band_html = request_with_proxy(band_page)
+                            band_html = requests.get(band_page, headers=header).text
                             band_soup = BeautifulSoup(band_html, "lxml")
                             band_links = band_soup.find_all("a")
                             song_links = [
@@ -431,7 +453,7 @@ for ch in starting_pages:
                                     memberid = member_query.id
                                 members2add.append(memberid)
                             with ThreadPoolExecutor(
-                                max_workers=len(song_links)
+                                max_workers=300
                             ) as executor:
                                 for song_link in song_links:
                                     executor.submit(

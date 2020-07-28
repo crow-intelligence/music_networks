@@ -5,7 +5,7 @@ import requests
 from fake_useragent import UserAgent
 from lxml.html import fromstring
 
-ua = UserAgent()
+ua = UserAgent(verify_ssl=False)
 
 
 def get_proxies():

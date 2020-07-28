@@ -28,7 +28,7 @@ for e in edges:
     g.add_edge(e[0], e[1], weight=e[2])
 
 l = g.layout_fruchterman_reingold_3d()
-#l = g.layout_kamada_kawai_3d()
+# l = g.layout_kamada_kawai_3d()
 coords = []
 for c in l:
     coords.append(c)
