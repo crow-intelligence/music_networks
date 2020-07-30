@@ -2,7 +2,6 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import requests
 from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 from sqlalchemy import (
@@ -17,8 +16,8 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session
 from sqlalchemy.orm import sessionmaker
-#from sqlalchemy.interfaces import PoolListener
-# from src.data_tasks.requests_with_proxies import request_with_proxy
+
+from src.data_tasks.requests_with_proxies import request_with_proxy
 
 ###############################################################################
 #####                                Setup                                #####
@@ -62,10 +61,10 @@ for ch in initials:
     url = base_url + ch
     header = {"User-Agent": ua.random}
     try:
-        # html = request_with_proxy(url)
-        html = requests.get(
-            url, headers=header
-        ).text
+        html = request_with_proxy(url)
+        # html = requests.get(
+        #     url, headers=header
+        # ).text
         starting_pages.append(ch)
         soup = BeautifulSoup(html, "lxml")
         range_end = soup.find_all("a", {"class": "pgPassive"})
@@ -92,8 +91,9 @@ Base = declarative_base()
 class Song(Base):
     __tablename__ = "song"
     id = Column(Integer, primary_key=True)
-    lyrics = Column(UnicodeText)
-    title = Column(String(1000))
+    lyrics = Column(UnicodeText, index=True)
+    title = Column(String(1000), nullable=False, index=True, unique=True)
+    # title contains the name of the performer, so it can be unique
     UniqueConstraint(lyrics, title, name="UniqueSong")
 
 
@@ -101,7 +101,7 @@ class Song2Year(Base):
     __tablename__ = "song2year"
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
-    year = Column(Integer)
+    year = Column(Integer, nullable=False)
     UniqueConstraint(songid, year, name="UiqueS2y")
 
 
@@ -109,39 +109,39 @@ class Song2Title(Base):
     __tablename__ = "song2title"
     id = Column(Integer, primary_key=True)
     songid = Column(Integer, ForeignKey("song.id"))
-    songtitle = Column(String(2000))
-    UniqueConstraint(songtitle, name="UniqueS2T")
+    songtitle = Column(String(2000), nullable=False, index=True, unique=True)
 
 
 class Composer(Base):
     __tablename__ = "composer"
     id = Column(Integer, primary_key=True)
-    name = Column(String(400))
-    aka = Column(String(400))
-    UniqueConstraint(name, aka, name="UniqueComposer")
+    name = Column(String(400), nullable=False, index=True)
+    aka = Column(String(400), index=True)
+    UniqueConstraint(name, aka, name="N2A")
 
 
 class Author(Base):
     __tablename__ = "author"
     id = Column(Integer, primary_key=True)
-    name = Column(String(400))
-    aka = Column(String(400))
-    UniqueConstraint(name, aka, name="UniqueAuthor")
+    name = Column(String(400), nullable=False, index=True)
+    aka = Column(String(400), index=True)
+    #TODO: one name may have several akas so this should be updated!!!!
+    UniqueConstraint(name, aka, name="N2A")
 
 
 class Performer(Base):
     __tablename__ = "performer"
     id = Column(Integer, primary_key=True)
-    name = Column(String(400))
-    aka = Column(String(400))
-    UniqueConstraint(name, aka, name="UniquePerformer")
+    name = Column(String(400), nullable=False, index=True)
+    aka = Column(String(400), index=True)
+    UniqueConstraint(name, aka, name="N2A")
 
 
 class Person(Base):
     __tablename__ = "person"
     id = Column(Integer, primary_key=True)
-    name = Column(String(400))
-    uri = Column(String(400))
+    name = Column(String(400), nullable=False, index=True)
+    uri = Column(String(400), index=True)
     UniqueConstraint(name, uri, name="UniquePerson")
 
 
@@ -190,7 +190,7 @@ engine = create_engine(
     db,
     pool_recycle=10,
     echo=False,
-    pool_size=100,
+    pool_size=300,
     max_overflow=20,
     encoding="utf-8",
     convert_unicode=True,
@@ -206,13 +206,13 @@ def band_link_processor(song_link, band_name):
     session_factory = sessionmaker(bind=engine)
     Session = scoped_session(session_factory)
     session = Session()
-    header = {"User-Agent": ua.random}
+    # header = {"User-Agent": ua.random}
     song_url = prefix + song_link
     try:
-        # song_html = request_with_proxy(song_url)
-        song_html = requests.get(
-            song_url, headers=header
-        ).text
+        song_html = request_with_proxy(song_url)
+        # song_html = requests.get(
+        #     song_url, headers=header
+        # ).text
         song_soup = BeautifulSoup(song_html, "lxml")
         song_title = song_soup.find_all("title")[0].text
         song_title = song_title.split(":")[1]
@@ -396,8 +396,8 @@ for ch in starting_pages:
     url = base_url + ch
     header = {"User-Agent": ua.random}
     try:
-        # html = request_with_proxy(url)
-        html = requests.get(url, headers=header).text
+        html = request_with_proxy(url)
+        # html = requests.get(url, headers=header).text
         soup = BeautifulSoup(html, "lxml")
         links = soup.find_all("a")
         for link in links:
@@ -419,8 +419,8 @@ for ch in starting_pages:
                         print(band_page)
                         header = {"User-Agent": ua.random}
                         try:
-                            # band_html = request_with_proxy(band_page)
-                            band_html = requests.get(band_page, headers=header).text
+                            band_html = request_with_proxy(band_page)
+                            # band_html = requests.get(band_page, headers=header).text
                             band_soup = BeautifulSoup(band_html, "lxml")
                             band_links = band_soup.find_all("a")
                             song_links = [
@@ -462,7 +462,7 @@ for ch in starting_pages:
                                     memberid = member_query.id
                                 members2add.append(memberid)
                             with ThreadPoolExecutor(
-                                max_workers=100
+                                max_workers=250
                             ) as executor:
                                 for song_link in song_links:
                                     executor.submit(
