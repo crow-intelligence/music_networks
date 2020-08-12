@@ -125,7 +125,7 @@ class Author(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(400), nullable=False, index=True)
     aka = Column(String(400), index=True)
-    #TODO: one name may have several akas so this should be updated!!!!
+    # TODO: one name may have several akas so this should be updated!!!!
     UniqueConstraint(name, aka, name="N2A")
 
 
@@ -180,7 +180,7 @@ class Composer2Song(Base):
 # db type, dialect, auth, location, port, dbname
 user = "root"
 password = "secret"
-#host = "127.0.0.1"
+# host = "127.0.0.1"
 host = "localhost"
 port = 3306
 dbname = "music_hu"
@@ -461,9 +461,7 @@ for ch in starting_pages:
                                 else:
                                     memberid = member_query.id
                                 members2add.append(memberid)
-                            with ThreadPoolExecutor(
-                                max_workers=250
-                            ) as executor:
+                            with ThreadPoolExecutor(max_workers=250) as executor:
                                 for song_link in song_links:
                                     executor.submit(
                                         band_link_processor, song_link, band_name

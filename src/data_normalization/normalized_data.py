@@ -99,8 +99,8 @@ engine = create_engine(db, echo=False)
 Base.metadata.create_all(engine)
 
 session_factory = sessionmaker(bind=engine)
-    Session = scoped_session(session_factory)
-    session = Session()
+Session = scoped_session(session_factory)
+session = Session()
 ###############################################################################
 #####                              Dedupe                                 #####
 ###############################################################################
@@ -224,9 +224,9 @@ rnodes = list(pr.keys())
 rescaled_pr = list(pr.values())
 rescaled_pr = list(minmax_scale(rescaled_pr, [1, 5]))
 pr_rescaled = dict(zip(rnodes, rescaled_pr))
-sorted_pr_rescaled = sorted(pr_rescaled.items(),
-                            key=operator.itemgetter(1),
-                            reverse=True)
+sorted_pr_rescaled = sorted(
+    pr_rescaled.items(), key=operator.itemgetter(1), reverse=True
+)
 sorted_pr_rescaled = [e[0] for e in sorted_pr_rescaled][:400]
 tobedeleted = [e for e in rnodes if e not in sorted_pr_rescaled]
 for node in tobedeleted:
@@ -240,12 +240,12 @@ with open("data/nodes.tsv", "w") as f:
         f.write(o)
 
 ppl_edge_weights = list(ppl_edges_weighted.values())
-ppl_edges_weights_rescaled = list(minmax_scale(ppl_edge_weights, [1,5]))
+ppl_edges_weights_rescaled = list(minmax_scale(ppl_edge_weights, [1, 5]))
 ppl_edges = list(ppl_edges_weighted.keys())
 ppl_edges_weighted_rescaled = dict(zip(ppl_edges, ppl_edges_weights_rescaled))
 
 with open("data/edges.tsv", "w") as f:
-    for k,v in ppl_edges_weighted_rescaled.items():
+    for k, v in ppl_edges_weighted_rescaled.items():
         if k[0] in giant and k[1] in giant:
             o = k[0] + "\t" + k[1] + "\t" + str(v) + "\n"
             f.write(o)
