@@ -59,7 +59,7 @@ toml==0.10.1
 tqdm==4.48.2
 typed-ast==1.4.1
 Unidecode==1.1.1
-urllib3==1.25.10
+urllib3==1.26.5
 wasabi==0.7.1
 wcwidth==0.2.5
 wordcloud==1.7.0
