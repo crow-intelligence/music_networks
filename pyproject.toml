@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Analyzing Hungarian pop song lyrics as networks"
 readme = "README.md"
 requires-python = "==3.12.*"
+authors = [{ name = "Zoltán Varjú", email = "zoltan.varju@crowintelligence.org" }]
 dependencies = [
     "aiosqlite>=0.22.1",
     "beautifulsoup4",
@@ -30,6 +31,9 @@ dependencies = [
     "stylecloud",
     "termplotlib",
 ]
+
+[project.urls]
+Repository = "https://github.com/crow-intelligence/music_networks"
 
 [project.optional-dependencies]
 # Heavy / optional: only net3d.py touches tensorflow, behind a try/except.

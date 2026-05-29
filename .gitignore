@@ -1,5 +1,7 @@
 # Created by .ignore support plugin (hsz.mobi)
 *.db
+*.db-wal
+*.db-shm
 data/
 vizs/
 etc/
@@ -10,3 +12,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .hypothesis/
+*.egg-info/
+build/
+dist/
+
+# Local / editor
+.env
+.DS_Store
