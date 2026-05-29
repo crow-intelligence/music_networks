@@ -16,6 +16,7 @@ from src.db import (
     Person,
     Song,
     SongAuthor,
+    SongExternal,
     SongPerformer,
     get_engine,
     make_session,
@@ -92,10 +93,15 @@ def test_full_crawl_persists_everything(tmp_path) -> None:
 
     with make_session(get_engine(db))() as s:
         song = s.execute(select(Song)).scalar_one()
-        assert song.id == 5
         assert song.title == "a dal"
         assert song.lyrics == "Első sor\nMásodik sor"
+        assert song.lyrics_source == "zeneszoveg"
         assert song.year == 1995
+        # identified across sources by its zeneszoveg site id (5), not the PK
+        ext = s.execute(select(SongExternal)).scalar_one()
+        assert ext.song_id == song.id
+        assert ext.source == "zeneszoveg"
+        assert ext.external_id == "5"
         # the related (other-band) song must NOT have been queued/stored
         assert _count(s, Song) == 1
         # credits

@@ -5,11 +5,13 @@ models that used to live in ``scraper.py``, ``process_songs.py`` and
 ``person_graph.py``. Everything now reads/writes a single SQLite file
 (``data/music.db``) in WAL mode.
 
-The schema captures, per song, its lyrics and metadata (release year, album,
-label, length) plus the people involved through role-specific link tables:
-``performer`` / ``author`` / ``composer`` (credit strings parsed from the song
-page) and ``person`` (band members, scraped from ``szemely/`` pages). Crawl
-progress lives in ``crawl_state`` so scraping is resumable across restarts.
+The schema captures, per song *version*, its lyrics and metadata plus the
+people involved through role-specific link tables: ``performer`` / ``author`` /
+``composer`` (credit strings) and ``person`` (band members). Each ``song`` row
+is one occurrence/recording, identified across sources by ``song_external``
+``(source, external_id)``; versions of the same composition share ``work_id``
+and remakes link back via ``original_song_id``. ``crawl_state`` tracks scraping
+progress and ``enrich_state`` tracks per-source enrichment — both resumable.
 """
 
 from __future__ import annotations
@@ -42,21 +44,60 @@ class Base(DeclarativeBase):
 # Domain tables
 # ---------------------------------------------------------------------------
 class Song(Base):
-    """A single song, keyed by the site's own numeric id (from the URL).
+    """A single song *version* (one recording / one occurrence).
 
-    Using the site id as the primary key makes re-scraping idempotent: the
-    same song URL always maps to the same row.
+    Keyed by a surrogate autoincrement id so the same logical song can exist as
+    multiple rows across sources (zeneszoveg, MusicBrainz, Genius) and as
+    multiple remakes. Source-specific ids live in :class:`SongExternal`, which
+    is what makes re-imports idempotent.
+
+    Dating: ``year`` is whatever a lyrics page reported (the release the page
+    hangs off — unreliable for first publication, kept only for comparison).
+    ``first_release_year`` is the authoritative version-level date (this
+    recording's first release, from MusicBrainz). Versions of the same
+    composition share ``work_id``; remakes point back to the earliest version
+    via ``original_song_id``.
     """
 
     __tablename__ = "song"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(1000), index=True)
     lyrics: Mapped[str | None] = mapped_column(UnicodeText)
+    lyrics_source: Mapped[str | None] = mapped_column(String(40))
     year: Mapped[int | None] = mapped_column(index=True)
     album: Mapped[str | None] = mapped_column(String(1000))
     label: Mapped[str | None] = mapped_column(String(1000))
     length: Mapped[str | None] = mapped_column(String(20))
+    # Authoritative version-level first-release dating (from MusicBrainz).
+    first_release_year: Mapped[int | None] = mapped_column(index=True)
+    first_release_date: Mapped[str | None] = mapped_column(String(10))
+    first_release_source: Mapped[str | None] = mapped_column(String(40))
+    # Composition grouping + remake linking.
+    work_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    is_remake: Mapped[bool] = mapped_column(default=False)
+    original_song_id: Mapped[int | None] = mapped_column(
+        ForeignKey("song.id"), index=True
+    )
+    genre: Mapped[str | None] = mapped_column(String(100))
+
+
+class SongExternal(Base):
+    """A source-specific id for a :class:`Song` (provenance + idempotency).
+
+    Each row maps one external identity (e.g. ``source='zeneszoveg'``,
+    ``external_id='10119'``) to a song row. Unique on ``(source, external_id)``
+    so re-imports upsert instead of duplicating.
+    """
+
+    __tablename__ = "song_external"
+    __table_args__ = (UniqueConstraint("source", "external_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    song_id: Mapped[int] = mapped_column(ForeignKey("song.id"), index=True)
+    source: Mapped[str] = mapped_column(String(40), index=True)
+    external_id: Mapped[str] = mapped_column(String(200), index=True)
+    url: Mapped[str | None] = mapped_column(String(600))
 
 
 class Performer(Base):
@@ -184,6 +225,25 @@ class CrawlState(Base):
     attempts: Mapped[int] = mapped_column(default=0)
     last_error: Mapped[str | None] = mapped_column(String(500))
     band_id: Mapped[int | None] = mapped_column(index=True)
+
+
+class EnrichState(Base):
+    """Per-song, per-source enrichment progress (resumable, like CrawlState).
+
+    ``status`` is one of ``pending`` / ``done`` / ``failed``. One row per
+    ``(song_id, source)`` lets each enrichment source (e.g. ``musicbrainz``,
+    ``genius``) be retried independently and resumed after a stop.
+    """
+
+    __tablename__ = "enrich_state"
+    __table_args__ = (UniqueConstraint("song_id", "source"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    song_id: Mapped[int] = mapped_column(ForeignKey("song.id"), index=True)
+    source: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    attempts: Mapped[int] = mapped_column(default=0)
+    last_error: Mapped[str | None] = mapped_column(String(500))
 
 
 def _enable_sqlite_pragmas(dbapi_conn, _record) -> None:

@@ -32,6 +32,7 @@ from src.db import (
     Song,
     SongAuthor,
     SongComposer,
+    SongExternal,
     SongPerformer,
     create_all,
     get_async_engine,
@@ -313,34 +314,58 @@ class Crawler:
                 .on_conflict_do_nothing(index_elements=["url"])
             )
 
+    async def _get_or_create_song_id(
+        self, session: AsyncSession, *, external_id: str, url: str, fields: dict
+    ) -> int:
+        """Return the surrogate id for a zeneszoveg song, creating it if new.
+
+        Idempotent on ``(source='zeneszoveg', external_id)`` via
+        :class:`~src.db.SongExternal`: re-scraping the same page updates the
+        existing row instead of inserting a duplicate.
+        """
+        existing = (
+            await session.execute(
+                select(SongExternal.song_id).where(
+                    SongExternal.source == "zeneszoveg",
+                    SongExternal.external_id == external_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            await session.execute(
+                update(Song).where(Song.id == existing).values(**fields)
+            )
+            return existing
+        song = Song(**fields)
+        session.add(song)
+        await session.flush()
+        session.add(
+            SongExternal(
+                song_id=song.id, source="zeneszoveg", external_id=external_id, url=url
+            )
+        )
+        await session.flush()
+        return song.id
+
     async def _save_song(self, session: AsyncSession, item: FetchResult) -> None:
         """Persist a song with its performers, authors, and composers."""
-        song_id = extract_song_id(item.url)
-        assert song_id is not None
+        site_id = extract_song_id(item.url)
+        assert site_id is not None
         rec = item.payload
         assert isinstance(rec, SongRecord)
-        await session.execute(
-            sqlite_insert(Song)
-            .values(
-                id=song_id,
-                title=rec.title,
-                lyrics=rec.lyrics,
-                year=rec.year,
-                album=rec.album,
-                label=rec.label,
-                length=rec.length,
-            )
-            .on_conflict_do_update(
-                index_elements=["id"],
-                set_={
-                    "title": rec.title,
-                    "lyrics": rec.lyrics,
-                    "year": rec.year,
-                    "album": rec.album,
-                    "label": rec.label,
-                    "length": rec.length,
-                },
-            )
+        song_id = await self._get_or_create_song_id(
+            session,
+            external_id=str(site_id),
+            url=item.url,
+            fields={
+                "title": rec.title,
+                "lyrics": rec.lyrics,
+                "lyrics_source": "zeneszoveg",
+                "year": rec.year,
+                "album": rec.album,
+                "label": rec.label,
+                "length": rec.length,
+            },
         )
         await self._link_credits(
             session, song_id, rec.performers, Performer, SongPerformer, "performer_id"
