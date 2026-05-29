@@ -103,4 +103,6 @@ testpaths = [
     "src/scraper/parse.py",
     "src/scraper/proxies.py",
     "src/scraper/fetch.py",
+    "src/enrich/match.py",
+    "src/enrich/musicbrainz.py",
 ]
