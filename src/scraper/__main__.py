@@ -27,9 +27,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m src.scraper")
     parser.add_argument("--db", default="data/music.db", help="SQLite DB path")
     parser.add_argument(
-        "--delay", type=float, default=1.5, help="seconds between requests"
+        "--delay", type=float, default=2.0, help="seconds between requests (per IP)"
     )
-    parser.add_argument("--concurrency", type=int, default=4, help="concurrent fetches")
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=None,
+        help="concurrent fetches (default: 16 with --proxies, else 4)",
+    )
     parser.add_argument(
         "--proxies", action="store_true", help="use free proxy rotation"
     )
@@ -53,9 +58,10 @@ async def _run(args: argparse.Namespace) -> None:
         print(report.render())
         return
 
-    pool = ProxyPool() if args.proxies else None
-    fetcher = Fetcher(delay=args.delay, concurrency=args.concurrency, proxies=pool)
-    crawler = Crawler(fetcher, db_path=args.db, concurrency=args.concurrency)
+    concurrency = args.concurrency or (16 if args.proxies else 4)
+    pool = ProxyPool(delay=args.delay) if args.proxies else None
+    fetcher = Fetcher(delay=args.delay, concurrency=concurrency, proxies=pool)
+    crawler = Crawler(fetcher, db_path=args.db, concurrency=concurrency)
     try:
         if args.command == "discover":
             initials = tuple(args.initials) if args.initials else DEFAULT_INITIALS

@@ -38,7 +38,7 @@ from src.db import (
     make_async_session,
 )
 from src.scraper import BASE_URL
-from src.scraper.fetch import Fetcher
+from src.scraper.fetch import Fetcher, FetchOutcome
 from src.scraper.parse import (
     BandPage,
     SongRecord,
@@ -102,6 +102,7 @@ class Crawler:
         db_path: str = "data/music.db",
         *,
         concurrency: int = 4,
+        batch_size: int = 200,
     ) -> None:
         """Create a crawler.
 
@@ -109,11 +110,14 @@ class Crawler:
             fetcher: Configured :class:`~src.scraper.fetch.Fetcher`.
             db_path: Path to the SQLite database file.
             concurrency: Number of concurrent fetch workers.
+            batch_size: Pending rows loaded into memory per processing batch,
+                so a full run never materializes all work at once.
         """
         self._fetcher = fetcher
         self._engine = get_async_engine(db_path)
         self._session_factory = make_async_session(self._engine)
         self._concurrency = concurrency
+        self._batch_size = batch_size
 
     async def init_db(self) -> None:
         """Create database tables if they do not yet exist."""
@@ -140,13 +144,15 @@ class Crawler:
         band_urls: list[str] = []
         seen: set[str] = set()
         for ch in initials:
-            html = await self._fetcher.get(f"{BASE_URL}eloadok/{ch}")
+            html = (await self._fetcher.get(f"{BASE_URL}eloadok/{ch}")).html
             if not html:
                 continue
             last = parse_last_index_page(html)
             pages = [html]
             for page in range(2, last + 1):
-                extra = await self._fetcher.get(f"{BASE_URL}eloadok/{ch}&page={page}")
+                extra = (
+                    await self._fetcher.get(f"{BASE_URL}eloadok/{ch}&page={page}")
+                ).html
                 if extra:
                     pages.append(extra)
             for page_html in pages:
@@ -184,8 +190,15 @@ class Crawler:
         songs = await self._run_kind("song", limit)
         return {"bands": bands, "songs": songs}
 
-    async def _load_pending(self, kind: str, limit: int | None) -> list[tuple]:
-        """Return ``(url, band_id)`` rows still needing work for ``kind``."""
+    async def _load_pending(
+        self, kind: str, after_url: str, limit: int
+    ) -> list[tuple]:
+        """Return the next ``(url, band_id)`` rows needing work for ``kind``.
+
+        Uses keyset pagination on ``url`` (``url > after_url``) so a single run
+        visits each eligible row once, in order — rows that fail this run keep
+        their ``url`` and so are not re-loaded until the next ``crawl``.
+        """
         async with self._session_factory() as session:
             stmt = (
                 select(CrawlState.url, CrawlState.band_id)
@@ -193,39 +206,56 @@ class Crawler:
                     CrawlState.kind == kind,
                     CrawlState.status != "done",
                     CrawlState.attempts < MAX_ATTEMPTS,
+                    CrawlState.url > after_url,
                 )
                 .order_by(CrawlState.url)
+                .limit(limit)
             )
-            if limit:
-                stmt = stmt.limit(limit)
             return list((await session.execute(stmt)).all())
 
     async def _run_kind(self, kind: str, limit: int | None) -> int:
-        """Fetch+parse all pending rows of ``kind`` through the single writer."""
-        rows = await self._load_pending(kind, limit)
-        if not rows:
-            return 0
+        """Fetch+parse pending rows of ``kind`` in batches through the writer.
 
+        Processes work in ``batch_size`` chunks (keyset-paginated by ``url``) so
+        memory stays bounded regardless of how much work is outstanding.
+        """
+        processed = 0
+        after_url = ""
+        while limit is None or processed < limit:
+            batch = self._batch_size
+            if limit is not None:
+                batch = min(batch, limit - processed)
+            rows = await self._load_pending(kind, after_url, batch)
+            if not rows:
+                break
+            after_url = rows[-1][0]
+            await self._process_batch(kind, rows)
+            processed += len(rows)
+        return processed
+
+    async def _process_batch(self, kind: str, rows: list[tuple]) -> None:
+        """Fetch+parse one batch of rows through the single writer coroutine."""
         write_q: asyncio.Queue = asyncio.Queue()
         sem = asyncio.Semaphore(self._concurrency)
 
         async def worker(url: str, band_id: int | None) -> None:
             async with sem:
-                html = await self._fetcher.get(absolute(url))
-            await write_q.put(self._build_result(kind, url, band_id, html))
+                outcome = await self._fetcher.get(absolute(url))
+            await write_q.put(self._build_result(kind, url, band_id, outcome))
 
         writer_task = asyncio.create_task(self._writer(write_q))
         await asyncio.gather(*(worker(url, bid) for url, bid in rows))
         await write_q.put(_WRITER_STOP)
         await writer_task
-        return len(rows)
 
     def _build_result(
-        self, kind: str, url: str, band_id: int | None, html: str | None
+        self, kind: str, url: str, band_id: int | None, outcome: FetchOutcome
     ) -> FetchResult:
-        """Parse fetched HTML into a :class:`FetchResult` (off the writer)."""
-        if html is None:
-            return FetchResult(kind, url, band_id, None, "fetch failed")
+        """Parse a fetch outcome into a :class:`FetchResult` (off the writer)."""
+        if outcome.html is None:
+            error = outcome.error or "fetch failed"
+            return FetchResult(kind, url, band_id, None, error)
+        html = outcome.html
         try:
             if kind == "band":
                 payload = parse_band_page(html, band_slug(url))

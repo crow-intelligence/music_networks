@@ -101,4 +101,6 @@ testpaths = [
     "tests",
     "src/utils.py",
     "src/scraper/parse.py",
+    "src/scraper/proxies.py",
+    "src/scraper/fetch.py",
 ]

@@ -22,6 +22,7 @@ from src.db import (
 )
 from src.scraper import BASE_URL
 from src.scraper.crawl import Crawler
+from src.scraper.fetch import FetchOutcome
 
 _BAND_HTML = """
 <html><body>
@@ -50,15 +51,18 @@ _SONG_HTML = """
 
 
 class FakeFetcher:
-    """Serves canned HTML by absolute URL; returns None for unknown URLs."""
+    """Serves canned HTML by absolute URL as a :class:`FetchOutcome`."""
 
     def __init__(self, pages: dict[str, str]) -> None:
         self.pages = pages
         self.calls: list[str] = []
 
-    async def get(self, url: str) -> str | None:
+    async def get(self, url: str) -> FetchOutcome:
         self.calls.append(url)
-        return self.pages.get(url)
+        html = self.pages.get(url)
+        if html is None:
+            return FetchOutcome(None, None, "fetch failed")
+        return FetchOutcome(html, 200, None)
 
 
 def _pages() -> dict[str, str]:
