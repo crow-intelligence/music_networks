@@ -216,10 +216,34 @@ class MusicBrainzClient:
             "artist", {"area": area_mbid, "limit": limit, "offset": offset}
         )
 
-    async def browse_recordings_by_artist(
+    async def search_recordings_by_artist(
         self, artist_mbid: str, *, limit: int = 100, offset: int = 0
     ) -> dict:
-        """Browse an artist's recordings with releases + work relations.
+        """Search an artist's recordings (results carry ``first-release-date``).
+
+        The search endpoint is how we get per-recording first-release dates;
+        the browse endpoint cannot return them.
+
+        Args:
+            artist_mbid: The artist's MusicBrainz id.
+            limit: Page size (max 100).
+            offset: Page offset.
+
+        Returns:
+            The raw search response (``count`` + ``recordings``).
+        """
+        return await self.get_json(
+            "recording",
+            {"query": f"arid:{artist_mbid}", "limit": limit, "offset": offset},
+        )
+
+    async def browse_recordings_work_rels(
+        self, artist_mbid: str, *, limit: int = 100, offset: int = 0
+    ) -> dict:
+        """Browse an artist's recordings with their work relations.
+
+        ``inc=work-rels`` is valid for browse (``releases`` is not); this is how
+        we recover the ``work_id`` that groups versions of a composition.
 
         Args:
             artist_mbid: The artist's MusicBrainz id.
@@ -233,7 +257,7 @@ class MusicBrainzClient:
             "recording",
             {
                 "artist": artist_mbid,
-                "inc": "releases+work-rels",
+                "inc": "work-rels",
                 "limit": limit,
                 "offset": offset,
             },
