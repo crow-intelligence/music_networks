@@ -1,0 +1,100 @@
+[project]
+name = "music-networks"
+version = "0.1.0"
+description = "Analyzing Hungarian pop song lyrics as networks"
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "beautifulsoup4",
+    "clean-text",
+    "corpus-toolkit",
+    "fake-useragent",
+    "gensim",
+    "httpx>=0.28.1",
+    "langdetect",
+    "lxml",
+    "matplotlib",
+    "networkx",
+    "nltk",
+    "numpy",
+    "pandas",
+    "pillow",
+    "pymysql",
+    "python-igraph",
+    "python-louvain",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "sqlalchemy",
+    "stylecloud",
+    "termplotlib",
+]
+
+[project.optional-dependencies]
+# Heavy / optional: only net3d.py touches tensorflow, behind a try/except.
+deeplearning = ["tensorflow"]
+
+[dependency-groups]
+dev = [
+    "ty",       # type checker (Astral)
+    "ruff",     # linter + formatter (Astral)
+    "pytest",   # test runner
+    "hypothesis",  # property-based testing
+]
+
+[tool.uv]
+# This is a collection of analysis scripts, not a distributable library,
+# so don't try to build/install it as a wheel.
+package = false
+
+# ---------------------------------------------------------------------------
+# Ruff: linting + formatting. Google-style docstrings enforced via pydocstyle.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "D",   # pydocstyle (docstring conventions)
+]
+# D100-D104: missing docstrings in modules/packages — relaxed while the
+# legacy scripts are gradually documented. New code should add them.
+ignore = ["D100", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests don't need full docstring coverage.
+"tests/**" = ["D100", "D101", "D102", "D103", "D107"]
+
+# ---------------------------------------------------------------------------
+# ty: static type checking (Astral).
+# ---------------------------------------------------------------------------
+[tool.ty.environment]
+python-version = "3.12"
+
+# ---------------------------------------------------------------------------
+# pytest: runs doctests + property-based tests.
+# `testpaths` lists import-safe modules explicitly, because several legacy
+# scripts execute code (DB connections, queries) at import time and cannot be
+# collected with --doctest-modules until that work is guarded under
+# `if __name__ == "__main__":`. Add modules here as they are cleaned up.
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+addopts = "--doctest-modules --import-mode=importlib"
+# Put the repo root on sys.path so `src` resolves as a namespace package.
+pythonpath = ["."]
+testpaths = [
+    "tests",
+    "src/utils.py",
+    "src/scraper/parse.py",
+]
