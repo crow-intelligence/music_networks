@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 
 from src.db import Song, SongExternal, get_engine, make_session
 from src.enrich.enrich import Enumerator, link_remakes
+from src.enrich.genius_kaggle import import_lyrics
 from src.enrich.musicbrainz import HUNGARY_AREA_MBID, MusicBrainzClient
 
 
@@ -39,6 +40,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("dates", help="enumerate recordings, then link remakes")
     d.add_argument("--limit", type=int, default=None, help="cap artists processed")
+
+    lyr = sub.add_parser("lyrics", help="import Hungarian Genius lyrics from CSV")
+    lyr.add_argument("--csv", required=True, help="path to song_lyrics.csv")
 
     sub.add_parser("link-remakes", help="recompute is_remake / original_song_id")
     sub.add_parser("qa", help="print dating coverage report")
@@ -109,6 +113,13 @@ async def _run(args: argparse.Namespace) -> None:
     if args.command == "link-remakes":
         flagged = await link_remakes(args.db)
         print(f"Linked {flagged} remakes.")
+        return
+    if args.command == "lyrics":
+        counts = import_lyrics(args.csv, args.db)
+        print(
+            f"Hungarian rows: {counts['rows']} "
+            f"(matched {counts['matched']}, added {counts['added']})."
+        )
         return
 
     client = MusicBrainzClient(delay=args.delay)

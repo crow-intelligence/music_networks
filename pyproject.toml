@@ -105,4 +105,5 @@ testpaths = [
     "src/scraper/fetch.py",
     "src/enrich/match.py",
     "src/enrich/musicbrainz.py",
+    "src/enrich/genius_kaggle.py",
 ]
