@@ -128,7 +128,7 @@ class Enumerator:
                         select(CrawlState.url)
                         .where(
                             CrawlState.kind == "mb_artist",
-                            CrawlState.status == "pending",
+                            CrawlState.status != "done",
                             CrawlState.attempts < MAX_ATTEMPTS,
                         )
                         .order_by(CrawlState.url)
