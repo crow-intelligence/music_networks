@@ -16,6 +16,7 @@ MusicBrainz Work), which is what lets remakes link back to the original.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import httpx
@@ -26,6 +27,9 @@ from src.scraper.fetch import RateLimiter
 # MusicBrainz web service base and Hungary's area MBID (stable identifier).
 WS_BASE = "https://musicbrainz.org/ws/2/"
 HUNGARY_AREA_MBID = "71bbafaa-e825-3e15-8ca9-017dcad1748b"
+
+# Transient HTTP statuses worth retrying (MB throttles with 503 under load).
+_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
 @dataclass
@@ -167,18 +171,27 @@ def parse_recording(rec: dict) -> RecordingInfo:
 class MusicBrainzClient:
     """Polite async client over the MusicBrainz web service."""
 
-    def __init__(self, *, delay: float = 1.0, timeout: float = 30.0) -> None:
+    def __init__(
+        self, *, delay: float = 1.0, timeout: float = 30.0, max_retries: int = 4
+    ) -> None:
         """Configure the client.
 
         Args:
             delay: Minimum seconds between requests (MusicBrainz asks for ~1s).
             timeout: Per-request timeout in seconds.
+            max_retries: Attempts for transient failures (timeouts, 429/5xx)
+                before giving up.
         """
         self._limiter = RateLimiter(delay)
         self._timeout = timeout
+        self._max_retries = max_retries
 
     async def get_json(self, path: str, params: dict) -> dict:
         """GET ``path`` under the web service and return parsed JSON.
+
+        Retries transient failures (connection/read timeouts and 429/5xx, which
+        MusicBrainz returns when throttling) with exponential backoff; other 4xx
+        errors propagate immediately.
 
         Args:
             path: Web-service path, e.g. ``"recording"``.
@@ -188,16 +201,30 @@ class MusicBrainzClient:
             The decoded JSON object.
 
         Raises:
-            httpx.HTTPStatusError: If the response status is not 2xx.
+            httpx.HTTPError: If a non-retryable error occurs, or retries are
+                exhausted.
         """
-        await self._limiter.acquire()
         query = {**params, "fmt": "json"}
-        async with httpx.AsyncClient(
-            timeout=self._timeout, headers={"User-Agent": USER_AGENT}
-        ) as client:
-            resp = await client.get(WS_BASE + path, params=query)
-            resp.raise_for_status()
-            return resp.json()
+        last_exc: httpx.HTTPError | None = None
+        for attempt in range(self._max_retries):
+            await self._limiter.acquire()
+            try:
+                async with httpx.AsyncClient(
+                    timeout=self._timeout, headers={"User-Agent": USER_AGENT}
+                ) as client:
+                    resp = await client.get(WS_BASE + path, params=query)
+            except httpx.TransportError as exc:  # timeouts, connection drops
+                last_exc = exc
+            else:
+                if resp.status_code not in _RETRY_STATUS:
+                    resp.raise_for_status()  # non-retryable 4xx -> propagate
+                    return resp.json()
+                last_exc = httpx.HTTPStatusError(
+                    f"HTTP {resp.status_code}", request=resp.request, response=resp
+                )
+            await asyncio.sleep(min(2.0**attempt, 30.0))
+        assert last_exc is not None
+        raise last_exc
 
     async def browse_artists_by_area(
         self, area_mbid: str = HUNGARY_AREA_MBID, *, limit: int = 100, offset: int = 0
