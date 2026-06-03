@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Magyar dalszövegek — diakronikus elemzés</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #1a1a17;
+    --paper: #f7f5ef;
+    --line: #cfc9ba;
+    --accent: #7a1f1f;
+    --muted: #6c6555;
+    --grid: #e4ded0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Courier Prime", monospace; line-height: 1.55;
+  }
+  header, section, footer { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  header { padding-top: 56px; padding-bottom: 16px; }
+  h1, h2, h3 { font-family: "IM Fell English", Georgia, serif; font-weight: 400; }
+  h1 { font-size: 2.7rem; margin: 0 0 6px; }
+  h2 { font-size: 1.7rem; margin: 56px 0 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  h3 { font-size: 1.15rem; margin: 22px 0 6px; }
+  .subtitle { font-style: italic; color: var(--muted); font-family: "IM Fell English", serif; font-size: 1.2rem; }
+  .lead { color: var(--muted); margin: 4px 0 0; }
+  nav { font-size: 0.82rem; margin-top: 18px; }
+  nav a { color: var(--accent); text-decoration: none; margin-right: 14px; white-space: nowrap; }
+  nav a:hover { text-decoration: underline; }
+  .note { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+  .empty { color: var(--muted); font-style: italic; padding: 14px 0; }
+  .flag { color: var(--accent); font-weight: 700; }
+  svg { max-width: 100%; height: auto; display: block; }
+  .axis text { fill: var(--muted); font-size: 11px; }
+  .axis line, .axis path { stroke: var(--line); }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; margin: 8px 0 4px; }
+  th, td { text-align: left; padding: 4px 10px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--muted); font-weight: 700; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .card { border: 1px solid var(--line); padding: 12px 14px; background: #fffdf8; }
+  .card .tname { font-family: "IM Fell English", serif; font-size: 1.1rem; }
+  .card .kw { color: var(--muted); font-size: 0.8rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0; font-size: 0.8rem; }
+  .legend span { cursor: pointer; user-select: none; padding: 1px 4px; border: 1px solid transparent; }
+  .legend span.off { opacity: 0.35; text-decoration: line-through; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: middle; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+  .pill { display: inline-block; font-size: 0.72rem; border: 1px solid var(--line); border-radius: 10px; padding: 0 7px; color: var(--muted); }
+  footer { color: var(--muted); font-size: 0.8rem; padding: 40px 24px 60px; border-top: 1px solid var(--line); margin-top: 56px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Magyar dalszövegek hálózata</h1>
+  <p class="subtitle">Diakronikus elemzés évtizedekre bontva</p>
+  <p class="lead">Témák, megkülönböztető szavak és jelentésváltozás a magyar
+    popzene dalszövegeiben — kizárólag aggregált mutatók (teljes szöveg sosem).</p>
+  <nav>
+    <a href="#overview">Adatok</a>
+    <a href="#keyness">Megkülönböztető szavak</a>
+    <a href="#topics">Témák az időben</a>
+    <a href="#change">Jelentésváltozás</a>
+    <a href="#heatmap">Eltérés-hőtérkép</a>
+    <a href="#drift">Kumulatív sodródás</a>
+    <a href="#neighbors">Szomszédos szavak</a>
+    <a href="#stats">Modell-statisztika</a>
+    <a href="#method">Módszertan</a>
+  </nav>
+</header>
+
+<section id="overview"><h2>Adatok évtizedenként</h2>
+  <p class="note">Dalok, előadók, szövegírók és zeneszerzők száma. A <span class="flag">★</span>
+    az alacsony elemszámú (statisztikailag bizonytalan) évtizedeket jelöli.</p>
+  <div id="c-overview"></div>
+</section>
+
+<section id="keyness"><h2>Megkülönböztető szavak</h2>
+  <p class="note">Évtizedenként legjellemzőbb lemmák (log-ratio &gt; 0, G² szerint rendezve).</p>
+  <div id="c-keyness" class="cols"></div>
+</section>
+
+<section id="topics"><h2>Témák az időben</h2>
+  <p class="note">BERTopic témák gyakorisága évtizedenként. A jelmagyarázatra kattintva
+    ki-/bekapcsolhatók a görbék.</p>
+  <div id="c-topics-legend" class="legend"></div>
+  <div id="c-topics"></div>
+  <h3>Témakártyák</h3>
+  <div id="c-topic-cards" class="cards"></div>
+</section>
+
+<section id="change"><h2>Jelentésváltozás az időben</h2>
+  <p class="note">Egy szó jelentés-eltérése (1 − igazított koszinusz-hasonlóság) évtized-átmenetenként.</p>
+  <div id="c-change-legend" class="legend"></div>
+  <div id="c-change"></div>
+</section>
+
+<section id="heatmap"><h2>Eltérés-hőtérkép</h2>
+  <p class="note">Szó × évtized-átmenet eltérés-intenzitás. Sötétebb = nagyobb változás.</p>
+  <div id="c-heatmap"></div>
+</section>
+
+<section id="drift"><h2>Kumulatív sodródás</h2>
+  <p class="note">A jelentés halmozott eltávolodása a kiinduló évtizedtől.</p>
+  <div id="c-drift-legend" class="legend"></div>
+  <div id="c-drift"></div>
+</section>
+
+<section id="neighbors"><h2>Szomszédos szavak korszakonként</h2>
+  <p class="note">Egy célszó legközelebbi szomszédai az egyes évtizedek modelljében.</p>
+  <div id="c-neighbors"></div>
+</section>
+
+<section id="stats"><h2>Szókincs- és modell-statisztika</h2>
+  <div id="c-vocab"></div>
+  <h3>Igazítási minőség</h3>
+  <div id="c-align"></div>
+</section>
+
+<section id="method"><h2>Módszertan</h2>
+  <p>A dalszövegek a zeneszoveg.hu oldalról származnak, évtizedekre bontva.
+    A korpusz nyelvfelismeréssel (magyar) szűrt, MinHash-LSH duplikátum-mentesített;
+    a számláló réteg huspacy lemmákból és gensim n-gramokból épül.
+    A témákat <em>BERTopic</em> adja magyar huBERT beágyazásokkal (128 tokenes
+    ablakokra darabolva, átlagolva), a c-TF-IDF a lemmatizált tokeneken.
+    A téma-elnevezéseket kézzel adtuk a kulcsszavak alapján.
+    A jelentésváltozást a <em>chronowords</em> SVD-beágyazásai mérik, évtizedenként
+    tanítva és Procrustes-igazítással összevetve.</p>
+  <p class="note">Az 1980 előtti évtizedek ritkák; a diakronikus modellek főként az
+    1990-es évektől megbízhatók. A megjelenített mutatók aggregáltak — a dashboard
+    sosem közöl teljes dalszöveget.</p>
+</section>
+
+<footer>Crow Intelligence · music_networks · statikus dashboard (inline SVG, nincs külső függőség)</footer>
+
+<script>
+const DATA = /*__DATA__*/;
+const PALETTE = ["#7a1f1f","#2f5d50","#9a6a1f","#3a4a7a","#6a2f5d","#4a6a2f",
+                 "#8a3a3a","#2f6a6a","#7a5a1f","#5a3a6a","#3a7a4a","#6a4a2a"];
+const SVGNS = "http://www.w3.org/2000/svg";
+
+function s(tag, attrs={}, kids=[]) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  for (const c of [].concat(kids)) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  return n;
+}
+function empty(id, msg) {
+  const d = document.createElement("div"); d.className = "empty"; d.textContent = msg;
+  document.getElementById(id).appendChild(d);
+}
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; }
+
+// ---- grouped bar chart (overview) ----
+function groupedBars(id, rows, series) {
+  if (!rows.length) { empty(id, "Nincs adat — előbb építsd a korpuszt."); return; }
+  const W = 1000, H = 360, m = {t: 16, r: 12, b: 46, l: 56};
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = niceMax(Math.max(...rows.flatMap(r => series.map(k => r[k.key]))));
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  const g = s("g", {transform: `translate(${m.l},${m.t})`});
+  for (let t = 0; t <= 4; t++) {
+    const y = ih - (ih * t / 4), val = Math.round(max * t / 4);
+    g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
+    g.appendChild(s("text", {x: -8, y: y + 4, "text-anchor": "end", fill: "#6c6555", "font-size": 11}, String(val)));
+  }
+  const bw = iw / rows.length, inner = bw * 0.74, sw = inner / series.length;
+  rows.forEach((r, i) => {
+    const x0 = i * bw + (bw - inner) / 2;
+    series.forEach((k, j) => {
+      const h = ih * (r[k.key] / max);
+      g.appendChild(s("rect", {x: x0 + j * sw, y: ih - h, width: sw - 1.5, height: h, fill: k.color}));
+    });
+    const label = r.decade + "s" + (r.low_n ? " ★" : "");
+    g.appendChild(s("text", {x: i * bw + bw / 2, y: ih + 16, "text-anchor": "middle",
+      fill: r.low_n ? "#7a1f1f" : "#6c6555", "font-size": 11}, label));
+  });
+  svg.appendChild(g);
+  document.getElementById(id).appendChild(svg);
+  const leg = document.createElement("div"); leg.className = "legend";
+  series.forEach(k => { const sp = document.createElement("span");
+    sp.innerHTML = `<span class="sw" style="background:${k.color}"></span>${k.label}`; leg.appendChild(sp); });
+  document.getElementById(id).appendChild(leg);
+}
+
+// ---- multi-line chart with toggleable legend ----
+function multiLine(id, legendId, labels, lines, yMaxOpt) {
+  const host = document.getElementById(id);
+  if (!lines.length || !labels.length) { empty(id, "Nincs adat — előbb futtasd az elemzést."); return; }
+  const W = 1000, H = 380, m = {t: 16, r: 14, b: 40, l: 50};
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const allY = lines.flatMap(l => l.values.filter(v => v != null));
+  const yMax = yMaxOpt != null ? yMaxOpt : niceMax(Math.max(0.0001, ...allY));
+  const xOf = i => labels.length === 1 ? iw / 2 : (iw * i / (labels.length - 1));
+  const yOf = v => ih - ih * (v / yMax);
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  const g = s("g", {transform: `translate(${m.l},${m.t})`});
+  for (let t = 0; t <= 4; t++) {
+    const y = ih - ih * t / 4;
+    g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
+    g.appendChild(s("text", {x: -8, y: y + 4, "text-anchor": "end", fill: "#6c6555", "font-size": 11}, (yMax * t / 4).toFixed(2)));
+  }
+  labels.forEach((lab, i) => g.appendChild(s("text", {x: xOf(i), y: ih + 16, "text-anchor": "middle", fill: "#6c6555", "font-size": 11}, lab)));
+  const paths = {};
+  lines.forEach((ln, idx) => {
+    const col = ln.color || PALETTE[idx % PALETTE.length];
+    let d = "", started = false;
+    ln.values.forEach((v, i) => { if (v == null) { started = false; return; }
+      d += (started ? " L" : " M") + xOf(i) + " " + yOf(v); started = true; });
+    const p = s("path", {d: d.trim(), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round"});
+    g.appendChild(p); paths[ln.name] = p;
+    ln.values.forEach((v, i) => { if (v != null) g.appendChild(s("circle", {cx: xOf(i), cy: yOf(v), r: 2.4, fill: col})); });
+  });
+  svg.appendChild(g); host.appendChild(svg);
+  if (legendId) {
+    const leg = document.getElementById(legendId);
+    lines.forEach((ln, idx) => {
+      const col = ln.color || PALETTE[idx % PALETTE.length];
+      const sp = document.createElement("span");
+      sp.innerHTML = `<span class="sw" style="background:${col}"></span>${ln.name}`;
+      sp.onclick = () => { sp.classList.toggle("off"); const off = sp.classList.contains("off");
+        paths[ln.name].style.display = off ? "none" : ""; };
+      leg.appendChild(sp);
+    });
+  }
+}
+
+// ---- heatmap ----
+function heatmap(id, rows, cols, values) {
+  if (!rows.length || !cols.length) { empty(id, "Nincs adat — előbb futtasd az elemzést."); return; }
+  const cell = 46, labelW = 120, headH = 60, W = labelW + cols.length * cell + 12, H = headH + rows.length * cell + 8;
+  const flat = values.flat().filter(v => v != null);
+  const vMax = Math.max(0.0001, ...flat);
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  cols.forEach((c, j) => svg.appendChild(s("text", {x: labelW + j * cell + cell / 2, y: headH - 8,
+    "text-anchor": "end", fill: "#6c6555", "font-size": 10,
+    transform: `rotate(-40 ${labelW + j * cell + cell / 2} ${headH - 8})`}, c)));
+  rows.forEach((r, i) => {
+    svg.appendChild(s("text", {x: labelW - 8, y: headH + i * cell + cell / 2 + 4, "text-anchor": "end", fill: "#1a1a17", "font-size": 12}, r));
+    cols.forEach((c, j) => {
+      const v = values[i][j];
+      const x = labelW + j * cell, y = headH + i * cell;
+      if (v == null) {
+        svg.appendChild(s("rect", {x, y, width: cell - 2, height: cell - 2, fill: "#efe9da"}));
+        svg.appendChild(s("text", {x: x + cell / 2, y: y + cell / 2 + 3, "text-anchor": "middle", fill: "#b8b0a0", "font-size": 10}, "·"));
+      } else {
+        const a = 0.12 + 0.88 * (v / vMax);
+        svg.appendChild(s("rect", {x, y, width: cell - 2, height: cell - 2, fill: "#7a1f1f", "fill-opacity": a.toFixed(3)}));
+        svg.appendChild(s("text", {x: x + cell / 2, y: y + cell / 2 + 3, "text-anchor": "middle",
+          fill: a > 0.55 ? "#f7f5ef" : "#1a1a17", "font-size": 10}, v.toFixed(2)));
+      }
+    });
+  });
+  document.getElementById(id).appendChild(svg);
+}
+
+function table(id, headers, rows) {
+  const t = document.createElement("table");
+  const thead = document.createElement("tr");
+  headers.forEach(h => { const th = document.createElement("th"); th.textContent = h; thead.appendChild(th); });
+  t.appendChild(thead);
+  rows.forEach(r => { const tr = document.createElement("tr");
+    r.forEach(c => { const td = document.createElement("td"); td.textContent = c; tr.appendChild(td); }); t.appendChild(tr); });
+  document.getElementById(id).appendChild(t);
+}
+
+// ===== render =====
+(function render() {
+  // Overview
+  groupedBars("c-overview", DATA.overview || [], [
+    {key: "songs", label: "Dalok", color: PALETTE[0]},
+    {key: "performers", label: "Előadók", color: PALETTE[1]},
+    {key: "authors", label: "Szövegírók", color: PALETTE[2]},
+    {key: "composers", label: "Zeneszerzők", color: PALETTE[3]},
+  ]);
+
+  // Keyness
+  const kn = DATA.keyness || [];
+  if (!kn.length) empty("c-keyness", "Nincs adat — előbb építsd a korpuszt.");
+  kn.forEach(d => {
+    const div = document.createElement("div");
+    div.innerHTML = `<h3>${d.decade}s</h3>` +
+      d.terms.map(t => `<div>${t.term} <span class="pill">G² ${t.log_likelihood}</span></div>`).join("");
+    document.getElementById("c-keyness").appendChild(div);
+  });
+
+  // Topics over time
+  const info = (DATA.topics && DATA.topics.info) || [];
+  const ot = (DATA.topics && DATA.topics.over_time) || [];
+  const nameOf = {}; info.forEach(t => nameOf[t.topic_id] = t.name);
+  const decades = [...new Set(ot.map(r => r.decade))].sort((a, b) => a - b);
+  const byTopic = {};
+  ot.forEach(r => { (byTopic[r.topic_id] = byTopic[r.topic_id] || {})[r.decade] = r.frequency; });
+  const topicLines = Object.keys(byTopic).map(tid => ({
+    name: nameOf[tid] || ("#" + tid),
+    values: decades.map(d => byTopic[tid][d] != null ? byTopic[tid][d] : 0),
+  }));
+  multiLine("c-topics", "c-topics-legend", decades.map(d => d + "s"), topicLines);
+  if (!info.length) empty("c-topic-cards", "Nincs téma — előbb futtasd a topics_bertopic modellt.");
+  info.forEach((t, i) => {
+    const c = document.createElement("div"); c.className = "card";
+    c.innerHTML = `<div class="tname">${t.name}</div>` +
+      `<div class="pill">${t.size} dal</div>` +
+      `<div class="kw">${(t.keywords || []).slice(0, 8).join(", ")}</div>`;
+    document.getElementById("c-topic-cards").appendChild(c);
+  });
+
+  const u = DATA.usage || {};
+  const trans = u.transitions || [];
+
+  // Semantic change
+  if (u.semantic_change && u.semantic_change.length) {
+    multiLine("c-change", "c-change-legend", trans,
+      u.semantic_change.map(w => ({name: w.word, values: w.shifts.map(s => s.shift)})));
+  } else empty("c-change", "Nincs adat — előbb futtasd a usage_change elemzést.");
+
+  // Heatmap
+  if (u.shift_heatmap && (u.shift_heatmap.words || []).length) {
+    heatmap("c-heatmap", u.shift_heatmap.words, trans, u.shift_heatmap.values);
+  } else empty("c-heatmap", "Nincs adat — előbb futtasd a usage_change elemzést.");
+
+  // Cumulative drift
+  if (u.cumulative_drift && u.cumulative_drift.length) {
+    multiLine("c-drift", "c-drift-legend", (u.decades || []).map(d => d + "s"),
+      u.cumulative_drift.map(w => ({name: w.word, values: w.drift})));
+  } else empty("c-drift", "Nincs adat — előbb futtasd a usage_change elemzést.");
+
+  // Nearest neighbors
+  if (u.nearest_neighbors && u.nearest_neighbors.length) {
+    u.nearest_neighbors.forEach(w => {
+      const div = document.createElement("div");
+      div.innerHTML = `<h3>${w.word}</h3>`;
+      const wrap = document.createElement("div"); wrap.className = "cols";
+      w.by_decade.forEach(bd => {
+        const col = document.createElement("div");
+        col.innerHTML = `<div class="pill">${bd.decade}s</div>` +
+          bd.neighbors.map(n => `<div>${n.word} <span class="note">${n.similarity}</span></div>`).join("");
+        wrap.appendChild(col);
+      });
+      div.appendChild(wrap);
+      document.getElementById("c-neighbors").appendChild(div);
+    });
+  } else empty("c-neighbors", "Nincs adat — előbb futtasd a usage_change elemzést.");
+
+  // Vocab + alignment stats
+  if (u.vocab_stats && u.vocab_stats.length) {
+    table("c-vocab", ["Évtized", "Szókincs", "Dim.", "Dalok"],
+      u.vocab_stats.map(v => [v.decade + "s", v.vocab_size, v.embedding_dim, v.n_songs]));
+  } else empty("c-vocab", "Nincs adat — előbb futtasd a usage_change elemzést.");
+  if (u.alignment_stats && u.alignment_stats.length) {
+    table("c-align", ["Átmenet", "Igazított szavak", "Átlagos hasonlóság"],
+      u.alignment_stats.map(a => [a.from + "s → " + a.to + "s", a.aligned_words, a.avg_similarity]));
+  } else empty("c-align", "Nincs adat — előbb futtasd a usage_change elemzést.");
+})();
+</script>
+</body>
+</html>

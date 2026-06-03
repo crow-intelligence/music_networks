@@ -20,7 +20,7 @@ import csv
 import sys
 from collections.abc import Iterator
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from src.db import (
     Performer,
@@ -33,6 +33,46 @@ from src.db import (
 from src.enrich.match import song_key
 
 _GENIUS = "genius"
+
+# Plausible range for a Hungarian-pop release year; anything outside is treated
+# as missing/garbage (the dump has a few ``0`` and out-of-range values).
+_MIN_YEAR = 1900
+_MAX_YEAR = 2026
+
+
+def parse_year(raw: str | None) -> int | None:
+    """Parse the Genius ``year`` field into a plausible release year.
+
+    Args:
+        raw: The raw ``year`` cell (e.g. ``"1969"``, ``"1969.0"``, ``"0"``,
+            ``""`` or ``None``).
+
+    Returns:
+        The four-digit year as an int when it falls within ``[1900, 2026]``,
+        else ``None``.
+
+    Examples:
+        >>> parse_year("1969")
+        1969
+        >>> parse_year("1969.0")
+        1969
+        >>> parse_year("0") is None
+        True
+        >>> parse_year("") is None
+        True
+        >>> parse_year(None) is None
+        True
+        >>> parse_year("3000") is None
+        True
+    """
+    if not raw:
+        return None
+    head = raw.strip()[:4]
+    if not head.isdigit():
+        return None
+    year = int(head)
+    return year if _MIN_YEAR <= year <= _MAX_YEAR else None
+
 
 # Lyrics fields blow past the default CSV field limit; raise it as high as the
 # platform allows.
@@ -54,14 +94,17 @@ def clean_row(row: dict) -> dict | None:
         row: A CSV row as produced by ``csv.DictReader``.
 
     Returns:
-        A dict with ``artist``/``title``/``lyrics``/``genre``/``genius_id``, or
-        ``None`` if it lacks the essentials (artist, title, non-empty lyrics).
+        A dict with ``artist``/``title``/``lyrics``/``genre``/``genius_id``/
+        ``year``, or ``None`` if it lacks the essentials (artist, title,
+        non-empty lyrics).
 
     Examples:
         >>> raw = {"artist": "Omega", "title": "Gyöngyhajú lány",
-        ...        "lyrics": "Egyszer volt...", "tag": "pop", "id": "42"}
+        ...        "lyrics": "Egyszer volt...", "tag": "pop", "id": "42",
+        ...        "year": "1969"}
         >>> clean_row(raw) == {"artist": "Omega", "title": "Gyöngyhajú lány",
-        ...     "lyrics": "Egyszer volt...", "genre": "pop", "genius_id": "42"}
+        ...     "lyrics": "Egyszer volt...", "genre": "pop", "genius_id": "42",
+        ...     "year": 1969}
         True
         >>> clean_row({"artist": "X", "title": "Y", "lyrics": "  "}) is None
         True
@@ -77,6 +120,7 @@ def clean_row(row: dict) -> dict | None:
         "lyrics": lyrics,
         "genre": (row.get("tag") or "").strip() or None,
         "genius_id": (row.get("id") or "").strip(),
+        "year": parse_year(row.get("year")),
     }
 
 
@@ -167,6 +211,69 @@ def import_lyrics(csv_path: str, db_path: str = "data/music.db") -> dict[str, in
         session.commit()
     engine.dispose()
     return {"matched": matched, "added": added, "rows": rows}
+
+
+def _undated_key_map(session) -> dict[str, list[int]]:
+    """Map ``artist|title`` -> song ids for lyrics songs lacking a release year.
+
+    Only songs that have lyrics but no ``first_release_year`` are candidates for
+    Genius-year backfill. The value is a *list* because duplicate song rows can
+    share a key — all of them should be dated from a single matching CSV row.
+    """
+    rows = session.execute(
+        select(Performer.name, Song.title, Song.id)
+        .join(SongPerformer, SongPerformer.song_id == Song.id)
+        .join(Performer, Performer.id == SongPerformer.performer_id)
+        .where(
+            Song.lyrics.is_not(None),
+            Song.lyrics != "",
+            Song.first_release_year.is_(None),
+        )
+    ).all()
+    mapping: dict[str, list[int]] = {}
+    for performer_name, title, song_id in rows:
+        mapping.setdefault(song_key(performer_name, title), []).append(song_id)
+    return mapping
+
+
+def import_years(csv_path: str, db_path: str = "data/music.db") -> dict[str, int]:
+    """Backfill ``first_release_year`` from the Genius dump's ``year`` column.
+
+    The Genius CSV carries a release year for ~all Hungarian rows that we drop on
+    lyrics import. This pass streams those rows and, for each that matches an
+    existing lyrics song (by ``artist|title``) still lacking a year, sets
+    ``first_release_year`` + ``first_release_source='genius'``. Non-destructive:
+    only fills nulls, so an authoritative MusicBrainz date is never overwritten.
+
+    Args:
+        csv_path: Path to ``song_lyrics.csv``.
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        Counts ``{"rows": int, "dated": int}`` (Hungarian rows seen, songs dated).
+    """
+    engine = get_engine(db_path)
+    rows = dated = 0
+    with make_session(engine)() as session:
+        keymap = _undated_key_map(session)
+        for row in iter_hungarian_rows(csv_path):
+            rows += 1
+            if row["year"] is None:
+                continue
+            song_ids = keymap.pop(song_key(row["artist"], row["title"]), None)
+            if not song_ids:
+                continue
+            session.execute(
+                update(Song)
+                .where(Song.id.in_(song_ids))
+                .values(first_release_year=row["year"], first_release_source=_GENIUS)
+            )
+            dated += len(song_ids)
+            if dated % 1000 == 0:
+                session.commit()
+        session.commit()
+    engine.dispose()
+    return {"rows": rows, "dated": dated}
 
 
 def _link_performer(session, song_id: int, name: str) -> None:

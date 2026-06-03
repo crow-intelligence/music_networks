@@ -101,13 +101,18 @@ class SongExternal(Base):
 
 
 class Performer(Base):
-    """A performing act, as credited in a song's "Előadó" field."""
+    """A performing act, as credited in a song's "Előadó" field.
+
+    ``artist_id`` optionally resolves this credit-string to a canonical
+    :class:`Artist` once it has been matched to a Wikidata entity.
+    """
 
     __tablename__ = "performer"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(400), unique=True, index=True)
     aka: Mapped[str | None] = mapped_column(String(400))
+    artist_id: Mapped[int | None] = mapped_column(ForeignKey("artist.id"), index=True)
 
 
 class Author(Base):
@@ -131,13 +136,18 @@ class Composer(Base):
 
 
 class Person(Base):
-    """A band member, scraped from a ``szemely/`` page; keyed by its URI."""
+    """A band member, scraped from a ``szemely/`` page; keyed by its URI.
+
+    ``artist_id`` optionally resolves the person to a canonical :class:`Artist`
+    once matched to a Wikidata entity.
+    """
 
     __tablename__ = "person"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(400), index=True)
     uri: Mapped[str] = mapped_column(String(400), unique=True, index=True)
+    artist_id: Mapped[int | None] = mapped_column(ForeignKey("artist.id"), index=True)
 
 
 class Band(Base):
@@ -148,6 +158,55 @@ class Band(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     slug: Mapped[str] = mapped_column(String(400), index=True)
     url: Mapped[str] = mapped_column(String(600))
+
+
+class Artist(Base):
+    """A canonical artist (person or musical group), enriched from Wikidata.
+
+    Unlike :class:`Performer`/:class:`Composer`/:class:`Person` — which are
+    name-only credit strings or scraped band members — an ``Artist`` carries
+    structured biographical facts (dates, origin, genre) keyed by stable
+    external identifiers. ``Performer.artist_id`` / ``Person.artist_id`` resolve
+    those credit strings to a canonical artist here.
+
+    Dating is unified across kinds: ``begin_date``/``end_date`` are birth/death
+    for a person and inception/dissolution for a group (``kind`` says which).
+    All dates are partial-ISO strings (``YYYY``/``YYYY-MM``/``YYYY-MM-DD``).
+    """
+
+    __tablename__ = "artist"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(400), index=True)
+    kind: Mapped[str | None] = mapped_column(String(20))  # 'person' | 'group'
+    mb_artist_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    wikidata_id: Mapped[str | None] = mapped_column(String(40), unique=True, index=True)
+    country: Mapped[str | None] = mapped_column(String(100))
+    begin_date: Mapped[str | None] = mapped_column(String(10))
+    end_date: Mapped[str | None] = mapped_column(String(10))
+    birthplace: Mapped[str | None] = mapped_column(String(200))
+    genre: Mapped[str | None] = mapped_column(String(400))
+    huwiki_title: Mapped[str | None] = mapped_column(String(400))
+    huwiki_url: Mapped[str | None] = mapped_column(String(600))
+    description: Mapped[str | None] = mapped_column(UnicodeText)
+
+
+class ArtistExternal(Base):
+    """A source-specific id for an :class:`Artist` (provenance + idempotency).
+
+    Mirrors :class:`SongExternal`: each row maps one external identity (e.g.
+    ``source='wikidata'``, ``external_id='Q151944'``) to an artist row. Unique
+    on ``(source, external_id)`` so re-imports upsert instead of duplicating.
+    """
+
+    __tablename__ = "artist_external"
+    __table_args__ = (UniqueConstraint("source", "external_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artist_id: Mapped[int] = mapped_column(ForeignKey("artist.id"), index=True)
+    source: Mapped[str] = mapped_column(String(40), index=True)
+    external_id: Mapped[str] = mapped_column(String(200), index=True)
+    url: Mapped[str | None] = mapped_column(String(600))
 
 
 # --- association tables (each unique on its pair) -------------------------
@@ -250,11 +309,14 @@ def _enable_sqlite_pragmas(dbapi_conn, _record) -> None:
     """Enable WAL mode and a busy timeout on every new SQLite connection.
 
     WAL lets readers and the single writer coexist; ``busy_timeout`` makes
-    writers wait briefly for a lock instead of failing immediately.
+    writers wait for a lock instead of failing immediately. The timeout is
+    generous (30 s) because two writers can legitimately contend — e.g. the
+    scraper and an ``src.enrich`` job both writing ``data/music.db`` — and a
+    short timeout makes a long-running job crash on a transient lock.
     """
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
@@ -299,13 +361,34 @@ def get_async_engine(db_path: Path | str = DEFAULT_DB_PATH) -> AsyncEngine:
     return engine
 
 
+def _add_missing_columns(sync_conn) -> None:
+    """Add columns introduced after a table's first creation (SQLite migration).
+
+    ``Base.metadata.create_all`` only creates missing *tables*, never missing
+    *columns*. The ``artist_id`` foreign keys were added to the pre-existing
+    ``performer``/``person`` tables, so back-fill them with a plain nullable
+    column when absent. Idempotent: a column already present is skipped.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(sync_conn)
+    existing_tables = set(inspector.get_table_names())
+    for table, column in (("performer", "artist_id"), ("person", "artist_id")):
+        if table not in existing_tables:
+            continue  # fresh DB: create_all already added the column with its FK
+        columns = {col["name"] for col in inspector.get_columns(table)}
+        if column not in columns:
+            sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} INTEGER"))
+
+
 async def create_all(engine: AsyncEngine) -> None:
-    """Create every table if it does not already exist.
+    """Create every table if it does not already exist, then run migrations.
 
     Args:
         engine: The async engine whose database should be initialized.
     """
     async with engine.begin() as conn:
+        await conn.run_sync(_add_missing_columns)
         await conn.run_sync(Base.metadata.create_all)
 
 

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import httpx
 
 from src.enrich import USER_AGENT
+from src.enrich.match import normalize
 from src.scraper.fetch import RateLimiter
 
 # MusicBrainz web service base and Hungary's area MBID (stable identifier).
@@ -168,6 +169,80 @@ def parse_recording(rec: dict) -> RecordingInfo:
     )
 
 
+def recording_query(artist: str, title: str) -> str:
+    r"""Build a Lucene query matching a recording by artist name and title.
+
+    Double quotes and backslashes are escaped so they cannot break out of the
+    quoted phrase (Lucene's only structurally dangerous characters inside a
+    quoted string).
+
+    Args:
+        artist: The performing act name.
+        title: The recording title.
+
+    Returns:
+        A query string for the ``recording`` search endpoint.
+
+    Examples:
+        >>> recording_query("Omega", "Gyöngyhajú lány")
+        'artist:"Omega" AND recording:"Gyöngyhajú lány"'
+        >>> recording_query('AC/DC', 'Say "hi"')
+        'artist:"AC/DC" AND recording:"Say \\"hi\\""'
+    """
+
+    def esc(text: str) -> str:
+        return text.replace("\\", "\\\\").replace('"', '\\"')
+
+    return f'artist:"{esc(artist)}" AND recording:"{esc(title)}"'
+
+
+def pick_earliest_recording(
+    artist: str, title: str, recordings: list[RecordingInfo]
+) -> RecordingInfo | None:
+    """Choose the earliest-released recording that matches our artist + title.
+
+    A candidate is kept only when its title normalizes exactly to ours and our
+    (normalized) artist appears in its artist credit — strict enough to avoid
+    pinning a wrong date on a same-titled but different song. Among the
+    survivors, the one with the earliest known release date wins (undated
+    candidates sort last, so a work id can still be recovered from them).
+
+    Args:
+        artist: Our performing act name.
+        title: Our song title.
+        recordings: Parsed candidates from a recording search.
+
+    Returns:
+        The best-matching :class:`RecordingInfo`, or ``None`` if none qualify.
+
+    Examples:
+        >>> recs = [
+        ...     RecordingInfo("r1", "Gyöngyhajú lány", "Omega", "2004", None),
+        ...     RecordingInfo("r2", "Gyöngyhajú Lány", "Omega", "1969", "w-9"),
+        ...     RecordingInfo("r3", "Other", "Omega", "1968", None),
+        ... ]
+        >>> pick_earliest_recording("Omega", "Gyöngyhajú lány", recs).gid
+        'r2'
+        >>> pick_earliest_recording("Beatrice", "Nem létező", recs) is None
+        True
+    """
+    norm_title = normalize(title)
+    norm_artist = normalize(artist)
+    validated = [
+        rec
+        for rec in recordings
+        if normalize(rec.title) == norm_title
+        and norm_artist
+        and norm_artist in normalize(rec.artist)
+    ]
+    if not validated:
+        return None
+    validated.sort(
+        key=lambda rec: (rec.first_release_date is None, rec.first_release_date or "")
+    )
+    return validated[0]
+
+
 class MusicBrainzClient:
     """Polite async client over the MusicBrainz web service."""
 
@@ -263,6 +338,38 @@ class MusicBrainzClient:
             "recording",
             {"query": f"arid:{artist_mbid}", "limit": limit, "offset": offset},
         )
+
+    async def search_recordings(
+        self, query: str, *, limit: int = 25, offset: int = 0
+    ) -> dict:
+        """Search recordings with a free-text Lucene query.
+
+        Args:
+            query: A Lucene query (see :func:`recording_query`).
+            limit: Page size.
+            offset: Page offset.
+
+        Returns:
+            The raw search response (``count`` + ``recordings``).
+        """
+        return await self.get_json(
+            "recording", {"query": query, "limit": limit, "offset": offset}
+        )
+
+    async def search_recordings_by_name(
+        self, artist: str, title: str, *, limit: int = 25
+    ) -> dict:
+        """Search recordings by performing-artist name and recording title.
+
+        Args:
+            artist: The performing act name.
+            title: The recording title.
+            limit: Page size.
+
+        Returns:
+            The raw search response (``count`` + ``recordings``).
+        """
+        return await self.search_recordings(recording_query(artist, title), limit=limit)
 
     async def browse_recordings_work_rels(
         self, artist_mbid: str, *, limit: int = 100, offset: int = 0

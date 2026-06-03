@@ -38,6 +38,30 @@ Repository = "https://github.com/crow-intelligence/music_networks"
 [project.optional-dependencies]
 # Heavy / optional: only net3d.py touches tensorflow, behind a try/except.
 deeplearning = ["tensorflow"]
+# Diachronic lyrics analytics (src/lyrics, src/dashboard), split by phase so each
+# pulls only what it needs. `nlp` (Phase 0+1) is light; `nlp-ml` (Phase 2-4) pulls
+# torch via sentence-transformers and is large.
+# Phase 0+1 — corpus foundation + stats/keyness. Needs the huspacy model:
+#   uv sync --extra nlp && uv run python -m spacy download hu_core_news_lg
+nlp = [
+    "huspacy",
+    "datasketch",
+    "spacy>=3.8,<3.9",
+    # The Hungarian pipeline (lemmatizer/POS) — a 401 MB spaCy model package,
+    # installed uv-natively from its wheel (huspacy.download() shells out to pip,
+    # which uv venvs lack).
+    "hu_core_news_lg @ https://huggingface.co/huspacy/hu_core_news_lg/resolve/main/hu_core_news_lg-3.8.1-py3-none-any.whl",
+]
+# Phase 2-4 — BERTopic topics, chronowords semantic change, Streamlit dashboard.
+nlp-ml = [
+    "bertopic",
+    "sentence-transformers",
+    "umap-learn",
+    "hdbscan",
+    "chronowords",
+    "streamlit",
+    "plotly",
+]
 
 [dependency-groups]
 dev = [
@@ -106,4 +130,13 @@ testpaths = [
     "src/enrich/match.py",
     "src/enrich/musicbrainz.py",
     "src/enrich/genius_kaggle.py",
+    "src/enrich/wikidata.py",
+    "src/enrich/dating.py",
+    "src/enrich/discogs.py",
+    "src/lyrics/stats.py",
+    "src/lyrics/corpus.py",
+    "src/lyrics/decade_keywords.py",
+    "src/lyrics/topics_bertopic.py",
+    "src/lyrics/usage_change.py",
+    "src/dashboard/build.py",
 ]

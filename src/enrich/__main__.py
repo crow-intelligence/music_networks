@@ -16,13 +16,18 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 
 from sqlalchemy import func, select
 
 from src.db import Song, SongExternal, get_engine, make_session
+from src.enrich.dating import RecordingDater
+from src.enrich.discogs import DiscogsClient, DiscogsDater
 from src.enrich.enrich import Enumerator, link_remakes
-from src.enrich.genius_kaggle import import_lyrics
+from src.enrich.genius_kaggle import import_lyrics, import_years
 from src.enrich.musicbrainz import HUNGARY_AREA_MBID, MusicBrainzClient
+from src.enrich.wikidata import WikidataClient
+from src.enrich.wikidata_enrich import WikidataEnricher
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -44,6 +49,42 @@ def _build_parser() -> argparse.ArgumentParser:
     lyr = sub.add_parser("lyrics", help="import Hungarian Genius lyrics from CSV")
     lyr.add_argument("--csv", required=True, help="path to song_lyrics.csv")
 
+    gy = sub.add_parser(
+        "genius-years", help="backfill song years from the Genius CSV year column"
+    )
+    gy.add_argument("--csv", required=True, help="path to song_lyrics.csv")
+
+    dl = sub.add_parser(
+        "date-lyrics", help="date lyrics songs via targeted MusicBrainz search"
+    )
+    dl.add_argument("--limit", type=int, default=None, help="cap MB lookups this run")
+    dl.add_argument(
+        "--page-year-fallback",
+        action="store_true",
+        help="on a MB miss, fall back to the scraped page year (less reliable)",
+    )
+
+    dd = sub.add_parser(
+        "date-discogs", help="date the still-undated tail via Discogs (needs token)"
+    )
+    dd.add_argument(
+        "--token",
+        default=None,
+        help="Discogs token (or set the DISCOGS_TOKEN env var)",
+    )
+    dd.add_argument("--limit", type=int, default=None, help="cap Discogs searches")
+
+    wd = sub.add_parser(
+        "wikidata", help="enrich artists/bands from Wikidata + Hungarian Wikipedia"
+    )
+    wd.add_argument("--max-pages", type=int, default=None, help="cap SPARQL pages")
+    wd.add_argument(
+        "--bio-limit", type=int, default=None, help="cap Wikipedia bios fetched"
+    )
+    wd.add_argument(
+        "--no-extracts", action="store_true", help="skip fetching Wikipedia bios"
+    )
+
     sub.add_parser("link-remakes", help="recompute is_remake / original_song_id")
     sub.add_parser("qa", help="print dating coverage report")
     return parser
@@ -58,7 +99,9 @@ def _qa(db_path: str) -> str:
 
         total = count(select(func.count()).select_from(Song))
         dated = count(
-            select(func.count()).select_from(Song).where(Song.first_release_year.is_not(None))
+            select(func.count())
+            .select_from(Song)
+            .where(Song.first_release_year.is_not(None))
         )
         with_lyrics = count(
             select(func.count()).select_from(Song).where(Song.lyrics.is_not(None))
@@ -120,6 +163,61 @@ async def _run(args: argparse.Namespace) -> None:
             f"Hungarian rows: {counts['rows']} "
             f"(matched {counts['matched']}, added {counts['added']})."
         )
+        return
+    if args.command == "genius-years":
+        counts = import_years(args.csv, args.db)
+        print(
+            f"Scanned {counts['rows']} Hungarian rows; "
+            f"dated {counts['dated']} songs from Genius years."
+        )
+        return
+    if args.command == "date-lyrics":
+        dater = RecordingDater(MusicBrainzClient(delay=args.delay), db_path=args.db)
+        try:
+            counts = await dater.run(
+                limit=args.limit, page_year_fallback=args.page_year_fallback
+            )
+            print(
+                f"Looked up {counts['looked_up']} artist|title keys; "
+                f"dated {counts['dated']} songs, {counts['missed']} without a date."
+            )
+        finally:
+            await dater.close()
+        return
+    if args.command == "wikidata":
+        enricher = WikidataEnricher(WikidataClient(delay=args.delay), db_path=args.db)
+        try:
+            counts = await enricher.import_facts(max_pages=args.max_pages)
+            print(
+                f"Fetched {counts['fetched']} Hungarian artists; linked "
+                f"{counts['linked_performers']} performers, "
+                f"{counts['linked_persons']} persons; "
+                f"queued {counts['queued']} for bios."
+            )
+            if not args.no_extracts:
+                bios = await enricher.fetch_bios(limit=args.bio_limit)
+                print(f"Fetched {bios} Hungarian Wikipedia bios.")
+        finally:
+            await enricher.close()
+        return
+    if args.command == "date-discogs":
+        token = args.token or os.environ.get("DISCOGS_TOKEN")
+        if not token:
+            raise SystemExit(
+                "A Discogs token is required: pass --token or set DISCOGS_TOKEN "
+                "(create one at discogs.com -> Settings -> Developers)."
+            )
+        # Discogs allows 60 auth'd req/min; keep at least ~1.2s between requests.
+        client = DiscogsClient(token, delay=max(args.delay, 1.2))
+        dater = DiscogsDater(client, db_path=args.db)
+        try:
+            counts = await dater.run(limit=args.limit)
+            print(
+                f"Looked up {counts['looked_up']} artist|title keys; "
+                f"dated {counts['dated']} songs, {counts['missed']} without a date."
+            )
+        finally:
+            await dater.close()
         return
 
     client = MusicBrainzClient(delay=args.delay)

@@ -70,9 +70,17 @@ uv run python -m src.scraper discover                 # seed band URLs (all init
 uv run python -m src.scraper discover --initials a --max-bands 1   # small/targeted
 uv run python -m src.scraper crawl                    # scrape pending bands, then songs
 uv run python -m src.scraper crawl --limit 50         # bounded chunk
+uv run python -m src.scraper --proxies crawl          # crawl via rotating free proxies
 uv run python -m src.scraper qa                        # success % + completeness report
-# global flags: --db PATH  --delay SECONDS (default 1.5)  --concurrency N  --proxies
+# global flags: --db PATH  --delay SECONDS (default 2.0)  --concurrency N  --proxies
+# NOTE: global flags are defined on the top-level parser, so they must come
+#       BEFORE the subcommand: `--proxies crawl`, not `crawl --proxies`.
 ```
+
+The live site IP-bans high-volume direct traffic (TCP connection refused), so a
+bulk crawl needs `--proxies`. Failed rows stay eligible while `attempts < 3`, so
+re-running `--proxies crawl` mops up the ~30% that miss on a given pass; repeat
+until `qa` plateaus.
 
 Key design points (see `src/scraper/crawl.py`):
 - **Resumable via the DB**: `crawl_state` tracks each URL as
