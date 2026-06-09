@@ -95,6 +95,68 @@ Key design points (see `src/scraper/crawl.py`):
   site's HTML changes. Selectors were verified live on 2026-05-29.
 - `tensorflow` extra and `--proxies` (free, self-healing pool) are opt-in.
 
+## Dashboard (`src/dashboard/`)
+
+A single-page data essay ("Magyar dalszövegek hálózata"). The source of truth is
+`template.html` — inline `<style>` + one `<script>` that draws **raw SVG with
+vanilla JS** (no D3/npm/bundler). `build.py` injects a `DATA` JSON blob into the
+template's `/*__DATA__*/` placeholder and now emits a **folder**:
+`data/dashboard/index.html` + `assets/` (self-hosted woff2 fonts + per-decade
+word-cloud PNGs). Charts are interactive (hover tooltips, toggleable/keyboard
+legends, small-multiples, cloud↔list and network↔list toggles); a11y-checked
+(axe clean), responsive (wide charts scroll inside contained regions), AA palette.
+
+```bash
+uv run python -m src.lyrics.networks      # (re)build per-decade word graphs (kenon) -> data/processed/networks/
+uv run python -m src.dashboard.build      # assemble DATA + render clouds + copy assets -> data/dashboard/
+python -m http.server 8000 -d data/dashboard   # preview
+```
+
+Build inputs / pieces:
+- **§3 word clouds** — `src/dashboard/clouds.py` renders one era-styled cloud
+  image per decade (font size ∝ √G²), using build-only TTFs in
+  `src/dashboard/assets/build-fonts/` (one open-licensed display face per decade;
+  baked into the PNG, never shipped as web fonts). The ranked list stays as the
+  analytical / screen-reader fallback.
+- **§8 ego networks** — `src/lyrics/networks.py` builds per-decade co-occurrence
+  graphs with `kenon` and exports compact adjacency payloads. Ego previews use
+  the **full** co-occurrence top-neighbours (not the disparity-filter backbone —
+  the backbone surfaces rare-word noise around frequent hubs). The standalone
+  force-directed *explorer* page is a planned follow-up that reuses these graphs.
+- Runtime fonts (IM Fell English, Courier Prime) are self-hosted subset woff2 in
+  `src/dashboard/assets/fonts/`, copied next to the HTML at build time — the page
+  has **no external network dependency**.
+- **Lexical diversity** in §stats — `src/lyrics/diversity.py` computes per-decade
+  **MATTR** (moving-average TTR, window 100; length-robust, unlike plain TTR),
+  merged into the vocab table at build time.
+- `MIN_DECADE = 1960` in `build.py` scopes the dashboard to 1960s+ (the sparse
+  1900–1950 decades are filtered out; underlying artifacts kept).
+- **Dating policy (important):** a song's decade comes from an authoritative
+  first-release year (`AUTHORITATIVE_SOURCES = ("musicbrainz","discogs")` in
+  `src/lyrics/stats.py`, reused by `corpus.iter_dated_lyrics` and the overview
+  SQL) when available, **else the scraped zeneszoveg `Song.year`** as a
+  decade-level fallback (~88% same-decade-accurate vs MB/Discogs). A
+  **non-authoritative `first_release_year` (e.g. Genius page-year) is never
+  trusted** — only `Song.year` is the fallback (the Genius page-year piled old
+  songs into the 2010s/2020s and was cleared from the DB). To add precise dates
+  to the fallback tail, run MB/Discogs enrichment (`src/enrich/{dating,discogs,
+  musicbrainz}.py`). Caveat: MB/Discogs date the *matched recording*, so a song
+  that only survives on a later compilation can still date late.
+- **Secrets / API tokens** live in a **gitignored `.env`** (e.g. a Discogs
+  personal access token). The enrich CLI reads `DISCOGS_TOKEN` from the env or
+  `--token`; pass it explicitly, e.g.
+  `DISCOGS_TOKEN=$(grep -E '^discogs_token=' .env | cut -d= -f2-) uv run python -m src.enrich date-discogs`.
+  Never commit `.env` or paste tokens into code/logs.
+- **Topic names need re-curation after any re-clustering.** `topic_names.json`
+  maps `topic_id → name`, but ids are not stable across BERTopic re-runs, so a
+  stale curated file silently mislabels new clusters — re-author it (from each
+  topic's keywords) as the **last** step after a recompute. The current
+  `topic_names.json` curates the **29-topic** clustering of the 43k-doc corpus;
+  the original 28-topic curation is parked at `topic_names.curated-OLD-28topics.json`.
+- New modules are import-safe (heavy deps imported inside functions) and carry
+  doctests + hypothesis tests (`tests/test_networks.py`, `tests/test_clouds.py`,
+  `tests/test_diversity.py`).
+
 ## Migration notes / known follow-ups
 
 - Dependencies were unpinned from their 2020 versions and resolved fresh on 3.12,

@@ -5,16 +5,18 @@ report. For each decade it counts songs and the distinct **performers**,
 **authors**, **composers** and **works** credited that decade, plus overall
 dated-coverage. Pure SQL aggregation over :mod:`src.db` — no NLP/ML deps.
 
-A song's decade comes from its best available year (``first_release_year`` if
-set, else the scraped page ``year``), bucketed by :func:`src.utils.year_to_decade`.
-Only songs with non-empty lyrics and a usable year are counted.
+A song's decade comes from an **authoritative** ``first_release_year`` (from
+MusicBrainz/Discogs — see :data:`AUTHORITATIVE_SOURCES`) when available, else the
+scraped page ``year`` as a decade-level fallback (~88% same-decade accurate). A
+non-authoritative ``first_release_year`` (e.g. a Genius page-year) is never
+trusted. Only lyrics-bearing songs with a usable year are counted.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from src.db import (
@@ -26,6 +28,12 @@ from src.db import (
     make_session,
 )
 from src.utils import year_to_decade
+
+# Sources that provide a real *first-release* year. Page years (Genius upload
+# year, scraped zeneszoveg year) are excluded from decade assignment because
+# they systematically push old songs into recent decades. ``manual`` covers
+# hand-verified corrections (e.g. songs MB only has on a later compilation).
+AUTHORITATIVE_SOURCES = ("musicbrainz", "discogs", "manual")
 
 
 def song_decade(first_release_year: int | None, year: int | None) -> int | None:
@@ -77,19 +85,33 @@ class DecadeStat:
     composers: int
 
 
+def _best_year():
+    """Authoritative first-release year if available, else the scraped page year.
+
+    A ``first_release_year`` is trusted only when its source is in
+    :data:`AUTHORITATIVE_SOURCES`; otherwise we fall back to ``Song.year`` (the
+    scraped page year — decade-accurate), never to a non-authoritative
+    ``first_release_year``.
+    """
+    authoritative = case(
+        (Song.first_release_source.in_(AUTHORITATIVE_SOURCES), Song.first_release_year),
+        else_=None,
+    )
+    return func.coalesce(authoritative, Song.year)
+
+
 def _decade_col():
     """SQL expression bucketing a song's best year into its decade."""
     # ``year - (year % 10)`` floors to the decade using integer ops only.
     # (SQLAlchemy 2.0 renders ``/`` as true/float division, which would not
     # floor — so we avoid division here.)
-    best = func.coalesce(Song.first_release_year, Song.year)
+    best = _best_year()
     return (best - best % 10).label("decade")
 
 
 def _dated_filter():
-    """Conditions selecting dated, lyrics-bearing songs (>= year 1000)."""
-    best = func.coalesce(Song.first_release_year, Song.year)
-    return (Song.lyrics.is_not(None), Song.lyrics != "", best >= 1000)
+    """Conditions selecting datable, lyrics-bearing songs (best year >= 1000)."""
+    return (Song.lyrics.is_not(None), Song.lyrics != "", _best_year() >= 1000)
 
 
 def _distinct_by_decade(session: Session, link_model, fk) -> dict[int, int]:

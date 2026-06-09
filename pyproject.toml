@@ -13,6 +13,7 @@ dependencies = [
     "fake-useragent",
     "gensim",
     "httpx>=0.28.1",
+    "kenon>=0.1.1",
     "langdetect",
     "lxml",
     "matplotlib",
@@ -138,5 +139,8 @@ testpaths = [
     "src/lyrics/decade_keywords.py",
     "src/lyrics/topics_bertopic.py",
     "src/lyrics/usage_change.py",
+    "src/lyrics/networks.py",
+    "src/lyrics/diversity.py",
     "src/dashboard/build.py",
+    "src/dashboard/clouds.py",
 ]

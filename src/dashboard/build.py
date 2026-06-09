@@ -22,6 +22,7 @@ project + stdlib code (no heavy ML deps), so it stays import-safe.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +32,20 @@ from src.lyrics.stats import DecadeStat
 DEFAULT_OUT = Path("data/dashboard/index.html")
 DEFAULT_TOPICS_DIR = Path("data/processed/topics")
 DEFAULT_USAGE_DIR = Path("data/processed/usage")
+DEFAULT_NETWORKS_DIR = Path("data/processed/networks")
 _TEMPLATE = Path(__file__).with_name("template.html")
+_ASSETS_SRC = Path(__file__).with_name("assets")
+DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
 
 # Decades below this song count are flagged as statistically thin in the UI.
 LOW_N_SONGS = 50
+
+# How many distinctive terms to surface per decade (word cloud + ranked list).
+WORD_COUNT = 40
+
+# The pre-1960 decades are too sparse to be meaningful; the dashboard shows
+# only decades from this year on (underlying artifacts are left intact).
+MIN_DECADE = 1960
 
 
 def decade_overview(stats: list[DecadeStat]) -> list[dict[str, Any]]:
@@ -125,6 +136,7 @@ def assemble_data(
     topic_info: list[dict[str, Any]],
     topics_over_time: list[dict[str, Any]],
     usage: dict[str, Any],
+    networks: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -136,6 +148,7 @@ def assemble_data(
         topic_info: Topic table (``topic_info.json``).
         topics_over_time: Per-(topic, decade) frequencies.
         usage: The diachronic-analysis blocks (may be empty).
+        networks: The per-decade word-graph blocks (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -159,7 +172,56 @@ def assemble_data(
         "keyness": keyness,
         "topics": {"info": info, "over_time": over_time},
         "usage": usage,
+        "networks": networks or {},
     }
+
+
+def emit_assets(
+    out_dir: Path,
+    keyness: list[dict[str, Any]],
+    *,
+    font_dir: Path = DEFAULT_FONT_DIR,
+    word_count: int = WORD_COUNT,
+) -> dict[int, dict[str, Any]]:
+    """Render the decade word-cloud images and copy shipped assets.
+
+    Renders one cloud PNG per decade under ``<out_dir>/assets/clouds``, copies
+    any self-hosted runtime fonts from ``src/dashboard/assets/fonts`` next to the
+    HTML, and annotates each keyness row **in place** with its ``cloud`` entry
+    (so the shared dicts the template serialises gain the image reference).
+
+    Args:
+        out_dir: The dashboard output directory (where ``index.html`` lives).
+        keyness: The keyness block; rows are mutated to add ``cloud``.
+        font_dir: Build-only directory of era ``.ttf`` files.
+        word_count: Max words per cloud.
+
+    Returns:
+        The cloud manifest ``{decade: {...}}`` (also attached to ``keyness``).
+    """
+    from src.dashboard.clouds import render_clouds
+
+    assets = out_dir / "assets"
+    src_fonts = _ASSETS_SRC / "fonts"
+    if src_fonts.is_dir():
+        dst_fonts = assets / "fonts"
+        dst_fonts.mkdir(parents=True, exist_ok=True)
+        for font in src_fonts.iterdir():
+            if font.is_file():
+                shutil.copy2(font, dst_fonts / font.name)
+
+    # Clear stale clouds first so dropped decades don't leave orphan images.
+    clouds_dir = assets / "clouds"
+    if clouds_dir.exists():
+        shutil.rmtree(clouds_dir)
+    manifest = render_clouds(
+        keyness, clouds_dir, font_dir=font_dir, word_count=word_count
+    )
+    for row in keyness:
+        cloud = manifest.get(int(row["decade"]))
+        if cloud is not None:
+            row["cloud"] = cloud
+    return manifest
 
 
 def render_html(data: dict[str, Any], template: str) -> str:
@@ -203,12 +265,35 @@ def load_usage(usage_dir: Path) -> dict[str, Any]:
     }
 
 
+def load_networks(networks_dir: Path) -> dict[str, Any]:
+    """Load the per-decade kenon word-graph artifacts into one dict.
+
+    Args:
+        networks_dir: Directory with ``index.json`` + ``decade_*.json`` graphs.
+
+    Returns:
+        ``{}`` if no ``index.json`` is present, otherwise
+        ``{"decades": [...], "graphs": {decade: <node-link dict>}}``.
+    """
+    index = networks_dir / "index.json"
+    if not index.exists():
+        return {}
+    meta = _load_json(index, {})
+    graphs: dict[str, Any] = {}
+    for decade in meta.get("decades", []):
+        graph = _load_json(networks_dir / f"decade_{decade}.json", None)
+        if graph is not None:
+            graphs[str(decade)] = graph
+    return {"decades": meta.get("decades", []), "graphs": graphs}
+
+
 def build(
     *,
     db_path: str = "data/music.db",
     corpus_dir: str = "data/processed/corpus",
     topics_dir: Path | str = DEFAULT_TOPICS_DIR,
     usage_dir: Path | str = DEFAULT_USAGE_DIR,
+    networks_dir: Path | str = DEFAULT_NETWORKS_DIR,
     out_path: Path | str = DEFAULT_OUT,
 ) -> Path:
     """Build the dashboard HTML from all cached artifacts.
@@ -218,6 +303,7 @@ def build(
         corpus_dir: Corpus JSONL dir for keyness.
         topics_dir: Topic artifacts dir.
         usage_dir: Diachronic-usage artifacts dir.
+        networks_dir: Per-decade word-graph artifacts dir.
         out_path: Output HTML path.
 
     Returns:
@@ -227,25 +313,61 @@ def build(
     from src.lyrics.decade_keywords import keywords_by_decade
     from src.lyrics.stats import collect_decade_stats
 
-    topics_dir, usage_dir, out_path = (
+    topics_dir, usage_dir, networks_dir, out_path = (
         Path(topics_dir),
         Path(usage_dir),
+        Path(networks_dir),
         Path(out_path),
     )
 
-    overview = decade_overview(collect_decade_stats(db_path))
+    overview = [
+        r
+        for r in decade_overview(collect_decade_stats(db_path))
+        if r["decade"] >= MIN_DECADE
+    ]
     docs = load_corpus(corpus_dir)
-    keyness = keyness_block(keywords_by_decade(docs)) if docs else []
+    all_keyness = (
+        keyness_block(keywords_by_decade(docs), top=WORD_COUNT) if docs else []
+    )
+    keyness = [r for r in all_keyness if r["decade"] >= MIN_DECADE]
+    topics_over_time = [
+        r
+        for r in _load_json(topics_dir / "topics_over_time.json", [])
+        if r.get("decade", 0) >= MIN_DECADE
+    ]
+
+    usage = load_usage(usage_dir)
+    if docs:
+        from src.lyrics.diversity import lexical_diversity_by_decade
+
+        lexdiv = lexical_diversity_by_decade(docs)
+        for row in usage.get("vocab_stats", []):
+            score = lexdiv.get(row.get("decade"))
+            if score is not None:
+                row["lexdiv"] = round(score, 3)
+
+    networks = load_networks(networks_dir)
+    if networks.get("decades"):
+        networks["decades"] = [d for d in networks["decades"] if d >= MIN_DECADE]
+        networks["graphs"] = {
+            k: v for k, v in networks["graphs"].items() if int(k) >= MIN_DECADE
+        }
+
     data = assemble_data(
         overview=overview,
         keyness=keyness,
         topic_info=_load_json(topics_dir / "topic_info.json", []),
-        topics_over_time=_load_json(topics_dir / "topics_over_time.json", []),
-        usage=load_usage(usage_dir),
+        topics_over_time=topics_over_time,
+        usage=usage,
+        networks=networks,
     )
 
-    html = render_html(data, _TEMPLATE.read_text(encoding="utf-8"))
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Render cloud images + copy assets; this annotates keyness rows in place
+    # (shared dict refs in `data`) before the blob is serialised.
+    emit_assets(out_path.parent, keyness)
+
+    html = render_html(data, _TEMPLATE.read_text(encoding="utf-8"))
     out_path.write_text(html, encoding="utf-8")
     return out_path
 
@@ -259,6 +381,7 @@ def main() -> None:
     parser.add_argument("--corpus-dir", default="data/processed/corpus")
     parser.add_argument("--topics-dir", default=str(DEFAULT_TOPICS_DIR))
     parser.add_argument("--usage-dir", default=str(DEFAULT_USAGE_DIR))
+    parser.add_argument("--networks-dir", default=str(DEFAULT_NETWORKS_DIR))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
 
@@ -267,9 +390,16 @@ def main() -> None:
         corpus_dir=args.corpus_dir,
         topics_dir=args.topics_dir,
         usage_dir=args.usage_dir,
+        networks_dir=args.networks_dir,
         out_path=args.out,
     )
+    folder = path.parent.resolve()
+    clouds = len(list((folder / "assets" / "clouds").glob("*.png")))
     print(f"Dashboard written -> {path.resolve()}")
+    print(
+        f"Standalone site ({clouds} clouds + self-hosted fonts, no external deps) "
+        f"-> copy this folder to your web root:\n  {folder}"
+    )
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ from pathlib import Path
 
 from src.db import Song, get_engine, make_session
 from src.enrich.match import normalize
-from src.lyrics.stats import song_decade
+from src.lyrics.stats import AUTHORITATIVE_SOURCES, song_decade
 
 DEFAULT_CORPUS_DIR = Path("data/processed/corpus")
 
@@ -162,7 +162,13 @@ def keep_token(pos: str, is_stop: bool, is_alpha: bool) -> bool:
 def iter_dated_lyrics(
     db_path: str = "data/music.db", *, limit: int | None = None
 ) -> Iterator[tuple[int, int, str]]:
-    """Yield ``(song_id, decade, lyrics)`` for every dated, lyrics-bearing song.
+    """Yield ``(song_id, decade, lyrics)`` for every datable lyrics song.
+
+    Decade priority: an **authoritative** first-release year (from
+    :data:`AUTHORITATIVE_SOURCES`) when present, else the scraped page ``year``
+    as a decade-level fallback (~88% same-decade accurate vs MB/Discogs). A
+    non-authoritative ``first_release_year`` (e.g. a Genius page-year) is *never*
+    trusted — only ``Song.year`` is used as the fallback.
 
     Args:
         db_path: Path to the SQLite database file.
@@ -177,15 +183,20 @@ def iter_dated_lyrics(
         with make_session(engine)() as session:
             rows = session.execute(
                 Song.__table__.select().with_only_columns(
-                    Song.id, Song.first_release_year, Song.year, Song.lyrics
+                    Song.id,
+                    Song.first_release_year,
+                    Song.first_release_source,
+                    Song.year,
+                    Song.lyrics,
                 )
             )
-            for song_id, fry, year, lyrics in rows:
+            for song_id, fry, source, year, lyrics in rows:
                 if limit is not None and yielded >= limit:
                     return
                 if not lyrics or not lyrics.strip():
                     continue
-                decade = song_decade(fry, year)
+                auth_fry = fry if source in AUTHORITATIVE_SOURCES else None
+                decade = song_decade(auth_fry, year)  # authoritative else page year
                 if decade is None:
                     continue
                 yield song_id, decade, lyrics

@@ -838,6 +838,25 @@ wheels = [
 ]
 
 [[package]]
+name = "kenon"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "chronowords" },
+    { name = "networkx" },
+    { name = "nltk" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "spacy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e1/fb/09e9e08c8a00fb4e5a6add7fe9cac9cd57135c776921a1eb24feec70b862/kenon-0.1.1.tar.gz", hash = "sha256:8858f3a58e25205c39b9676f77f528416b554db4d0c995ef21fd4925bea693c8", size = 13399, upload-time = "2026-04-21T12:56:51.076Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/69/7882ebb1c304f39f7f346295e63554da31cc658ea4ed603e18e29b5dbcba/kenon-0.1.1-py3-none-any.whl", hash = "sha256:b4eafcb2bd7bdcbde77478310545cac919c45b079da0d7273192aa1e70d377fc", size = 16699, upload-time = "2026-04-21T12:56:49.882Z" },
+]
+
+[[package]]
 name = "keras"
 version = "3.14.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1090,6 +1109,7 @@ dependencies = [
     { name = "fake-useragent" },
     { name = "gensim" },
     { name = "httpx" },
+    { name = "kenon" },
     { name = "langdetect" },
     { name = "lxml" },
     { name = "matplotlib" },
@@ -1152,6 +1172,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hu-core-news-lg", marker = "extra == 'nlp'", url = "https://huggingface.co/huspacy/hu_core_news_lg/resolve/main/hu_core_news_lg-3.8.1-py3-none-any.whl" },
     { name = "huspacy", marker = "extra == 'nlp'" },
+    { name = "kenon", specifier = ">=0.1.1" },
     { name = "langdetect" },
     { name = "lxml" },
     { name = "matplotlib" },

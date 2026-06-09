@@ -4,63 +4,209 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Magyar dalszövegek — diakronikus elemzés</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet" />
 <style>
-  :root {
-    --ink: #1a1a17;
-    --paper: #f7f5ef;
-    --line: #cfc9ba;
-    --accent: #7a1f1f;
-    --muted: #6c6555;
-    --grid: #e4ded0;
+  /* Self-hosted fonts (subset woff2, Latin + Latin-Ext incl. Hungarian) —
+     the dashboard ships with no external network dependency. */
+  @font-face {
+    font-family: 'Courier Prime'; font-style: normal; font-weight: 400;
+    font-display: swap; src: url('assets/fonts/courierprime-400-n-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
   }
+  @font-face {
+    font-family: 'Courier Prime'; font-style: normal; font-weight: 400;
+    font-display: swap; src: url('assets/fonts/courierprime-400-n-lat.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: 'Courier Prime'; font-style: normal; font-weight: 700;
+    font-display: swap; src: url('assets/fonts/courierprime-700-n-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+  }
+  @font-face {
+    font-family: 'Courier Prime'; font-style: normal; font-weight: 700;
+    font-display: swap; src: url('assets/fonts/courierprime-700-n-lat.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: 'IM Fell English'; font-style: italic; font-weight: 400;
+    font-display: swap; src: url('assets/fonts/imfellenglish-400-i-lat.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: 'IM Fell English'; font-style: normal; font-weight: 400;
+    font-display: swap; src: url('assets/fonts/imfellenglish-400-n-lat.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  :root {
+    /* --- core identity (preserved) --- */
+    --ink: #1a1a17;            /* headings / strongest text */
+    --paper: #f7f5ef;          /* warm cream background */
+    --line: #cfc9ba;           /* borders */
+    --accent: #7a1f1f;         /* brick red */
+    --grid: #e4ded0;           /* chart gridlines */
+
+    /* --- legibility pass: darker body + caption tiers (AA on cream) --- */
+    --body: #2c2a24;           /* body text — ~11:1 on --paper */
+    --muted: #5a5346;          /* captions/axes — ~6.4:1 on --paper (was #6c6555) */
+    --card-bg: #fffdf8;
+
+    /* --- ordered categorical data palette (colorblind-safe, brick-harmonized) --- */
+    /* Reused so the same series = same color across topics / change / drift. */
+    --c1: #7a1f1f;  /* brick red */
+    --c2: #2f5d50;  /* teal-green */
+    --c3: #856404;  /* dark goldenrod (AA on cream) */
+    --c4: #34568b;  /* slate blue */
+    --c5: #7d3c98;  /* muted purple */
+    --c6: #486b2f;  /* olive green */
+    --c7: #a8431a;  /* burnt orange (AA on cream) */
+    --c8: #2a6f7a;  /* deep cyan */
+    --ctx: #b6b0a2; /* muted "context" line (de-emphasized series) */
+
+    /* --- heatmap sequential ramp (single-hue reds, separate from categorical) --- */
+    --heat-min: #fdece1;
+    --heat-max: #7a1f1f;
+
+    /* --- type scale --- */
+    --fs-h1: 2.7rem;
+    --fs-h2: 1.7rem;
+    --fs-h3: 1.15rem;
+    --fs-body: 1rem;           /* 16px base */
+    --fs-sub: 1.2rem;
+    --fs-caption: 0.9rem;
+    --lh-body: 1.6;
+
+    /* --- spacing scale --- */
+    --sp-1: 6px;
+    --sp-2: 12px;
+    --sp-3: 18px;
+    --sp-4: 28px;
+    --sp-5: 44px;
+    --sp-6: 56px;
+
+    --measure: 70ch;           /* readable prose line length */
+  }
+  html { font-size: 100%; }
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font-family: "Courier Prime", monospace; line-height: 1.55;
+    margin: 0; background: var(--paper); color: var(--body);
+    font-family: "Courier Prime", monospace;
+    font-size: var(--fs-body); line-height: var(--lh-body);
+    -webkit-text-size-adjust: 100%;
   }
   header, section, footer { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
-  header { padding-top: 56px; padding-bottom: 16px; }
-  h1, h2, h3 { font-family: "IM Fell English", Georgia, serif; font-weight: 400; }
-  h1 { font-size: 2.7rem; margin: 0 0 6px; }
-  h2 { font-size: 1.7rem; margin: 56px 0 4px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-  h3 { font-size: 1.15rem; margin: 22px 0 6px; }
-  .subtitle { font-style: italic; color: var(--muted); font-family: "IM Fell English", serif; font-size: 1.2rem; }
-  .lead { color: var(--muted); margin: 4px 0 0; }
-  nav { font-size: 0.82rem; margin-top: 18px; }
+  header { padding-top: var(--sp-6); padding-bottom: var(--sp-2); }
+  h1, h2, h3 { font-family: "IM Fell English", Georgia, serif; font-weight: 400; color: var(--ink); }
+  h1 { font-size: var(--fs-h1); margin: 0 0 var(--sp-1); line-height: 1.15; }
+  h2 { font-size: var(--fs-h2); margin: var(--sp-6) 0 var(--sp-1); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1); }
+  h3 { font-size: var(--fs-h3); margin: var(--sp-3) 0 var(--sp-1); color: var(--body); }
+  p { max-width: var(--measure); }
+  .subtitle { font-style: italic; color: var(--muted); font-family: "IM Fell English", Georgia, serif; font-size: var(--fs-sub); margin: 0 0 var(--sp-1); }
+  .lead { color: var(--body); margin: var(--sp-1) 0 0; }
+  nav { font-size: 0.85rem; margin-top: var(--sp-3); line-height: 2; }
   nav a { color: var(--accent); text-decoration: none; margin-right: 14px; white-space: nowrap; }
   nav a:hover { text-decoration: underline; }
-  .note { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+  .note { color: var(--muted); font-size: var(--fs-caption); font-style: italic; max-width: var(--measure); }
+  /* Prose links (e.g. §Módszertan references) — accent, AA on cream. */
+  main p a { color: var(--accent); text-decoration: underline; }
+  main p a:hover { text-decoration: none; }
   .empty { color: var(--muted); font-style: italic; padding: 14px 0; }
   .flag { color: var(--accent); font-weight: 700; }
+  /* Visible keyboard focus everywhere (a11y). */
+  a:focus-visible, button:focus-visible, select:focus-visible,
+  [tabindex]:focus-visible, .legend span:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px;
+  }
+  /* Skip link — visible only when focused. */
+  .skip {
+    position: absolute; left: 8px; top: -48px; z-index: 100;
+    background: var(--accent); color: var(--paper); padding: 8px 14px;
+    border-radius: 4px; text-decoration: none; transition: top 0.12s;
+  }
+  .skip:focus { top: 8px; }
+  /* Screen-reader-only utility (data-table / list fallbacks). */
+  .visually-hidden {
+    position: absolute !important; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+    white-space: nowrap; border: 0;
+  }
   svg { max-width: 100%; height: auto; display: block; }
-  .axis text { fill: var(--muted); font-size: 11px; }
+  .axis text { fill: var(--muted); font-size: 12px; }
   .axis line, .axis path { stroke: var(--line); }
   .gridline { stroke: var(--grid); stroke-width: 1; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; margin: 8px 0 4px; }
-  th, td { text-align: left; padding: 4px 10px; border-bottom: 1px solid var(--grid); }
+  table { border-collapse: collapse; width: 100%; font-size: var(--fs-caption); margin: var(--sp-1) 0; }
+  th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--grid); }
   th { color: var(--muted); font-weight: 700; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-  .card { border: 1px solid var(--line); padding: 12px 14px; background: #fffdf8; }
-  .card .tname { font-family: "IM Fell English", serif; font-size: 1.1rem; }
-  .card .kw { color: var(--muted); font-size: 0.8rem; }
-  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0; font-size: 0.8rem; }
-  .legend span { cursor: pointer; user-select: none; padding: 1px 4px; border: 1px solid transparent; }
-  .legend span.off { opacity: 0.35; text-decoration: line-through; }
-  .legend .sw { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: middle; }
-  .cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
-  .pill { display: inline-block; font-size: 0.72rem; border: 1px solid var(--line); border-radius: 10px; padding: 0 7px; color: var(--muted); }
-  footer { color: var(--muted); font-size: 0.8rem; padding: 40px 24px 60px; border-top: 1px solid var(--line); margin-top: 56px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-2); }
+  .card { border: 1px solid var(--line); padding: var(--sp-2) 14px; background: var(--card-bg); }
+  .card .tname { font-family: "IM Fell English", Georgia, serif; font-size: 1.1rem; color: var(--ink); }
+  .card .kw { color: var(--muted); font-size: 0.85rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 14px; margin: var(--sp-1) 0; font-size: 0.85rem; }
+  .legend span { cursor: pointer; user-select: none; padding: 3px 6px; border: 1px solid transparent; min-height: 28px; display: inline-flex; align-items: center; }
+  .legend span.off { opacity: 0.4; text-decoration: line-through; }
+  .legend .sw { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: middle; flex: 0 0 auto; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-3); }
+  .pill { display: inline-block; font-size: 0.75rem; border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
+  /* §3 distinctive-word clouds */
+  #c-keyness { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+  .cloud-fig { margin: 0; }
+  .cloud-img { width: 100%; height: auto; border: 1px solid var(--line); background: var(--card-bg); border-radius: 3px; }
+  .rank { margin: var(--sp-1) 0; padding-left: 1.4em; columns: 2; column-gap: var(--sp-3); font-size: 0.9rem; }
+  .rank li { break-inside: avoid; margin-bottom: 2px; }
+  .rank .pill { font-size: 0.68rem; }
+  /* §8 ego network */
+  .ego-fig { margin: 0; max-width: 760px; }
+  .ego-fig svg { margin: 0 auto; }
+  .ego-list { columns: 2; column-gap: var(--sp-3); font-size: 0.9rem; padding-left: 1.3em; }
+  .ego-list li { break-inside: avoid; margin-bottom: 2px; }
+  /* Shared chart tooltip. */
+  .tooltip {
+    position: fixed; z-index: 50; pointer-events: none; opacity: 0;
+    background: var(--ink); color: var(--paper); font-size: 0.8rem;
+    padding: 5px 9px; border-radius: 4px; max-width: 240px; line-height: 1.4;
+    transition: opacity 0.08s; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  /* Segmented view toggle (cloud/list, chart/multiples, network/list). */
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: var(--sp-1) 0; }
+  .toggle button {
+    font: inherit; font-size: 0.8rem; border: 0; background: transparent;
+    color: var(--muted); padding: 6px 12px; min-height: 36px; cursor: pointer;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--accent); color: var(--paper); }
+  .controls { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin: var(--sp-1) 0 var(--sp-2); font-size: 0.85rem; }
+  .controls label { color: var(--muted); }
+  .controls select { font: inherit; font-size: 0.85rem; padding: 5px 8px; min-height: 36px; background: var(--card-bg); color: var(--body); border: 1px solid var(--line); border-radius: 4px; }
+  .btn { font: inherit; font-size: 0.8rem; padding: 6px 12px; min-height: 36px; cursor: pointer; background: var(--card-bg); color: var(--body); border: 1px solid var(--line); border-radius: 4px; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  footer { color: var(--muted); font-size: 0.85rem; padding: 40px 24px 60px; border-top: 1px solid var(--line); margin-top: var(--sp-6); }
+  /* Charts live in a contained scroll region so they never break page layout. */
+  .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .wide-chart { width: 100%; }
+  /* ---- responsive ---- */
+  @media (max-width: 640px) {
+    :root { --fs-h1: 2rem; --fs-h2: 1.4rem; --fs-h3: 1.05rem; }
+    header, section, footer { padding: 0 16px; }
+    header { padding-top: var(--sp-5); }
+    nav { line-height: 2.4; }
+    nav a { display: inline-block; }
+    .cols, .cards, #c-keyness { grid-template-columns: 1fr; }
+    .rank, .ego-list { columns: 1; }
+    .controls { gap: var(--sp-1) var(--sp-2); }
+    /* Keep chart text legible: don't shrink the whole SVG below a readable
+       width — scroll it inside its contained region instead. */
+    .chart-scroll .wide-chart { min-width: 560px; }
+    .ego-fig { overflow-x: auto; }
+    .ego-fig svg { min-width: 480px; }
+  }
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Ugrás a tartalomra</a>
 <header>
   <h1>Magyar dalszövegek hálózata</h1>
   <p class="subtitle">Diakronikus elemzés évtizedekre bontva</p>
   <p class="lead">Témák, megkülönböztető szavak és jelentésváltozás a magyar
     popzene dalszövegeiben — kizárólag aggregált mutatók (teljes szöveg sosem).</p>
-  <nav>
+  <nav aria-label="Szakaszok">
     <a href="#overview">Adatok</a>
     <a href="#keyness">Megkülönböztető szavak</a>
     <a href="#topics">Témák az időben</a>
@@ -73,6 +219,7 @@
   </nav>
 </header>
 
+<main id="main">
 <section id="overview"><h2>Adatok évtizedenként</h2>
   <p class="note">Dalok, előadók, szövegírók és zeneszerzők száma. A <span class="flag">★</span>
     az alacsony elemszámú (statisztikailag bizonytalan) évtizedeket jelöli.</p>
@@ -85,12 +232,15 @@
 </section>
 
 <section id="topics"><h2>Témák az időben</h2>
-  <p class="note">BERTopic témák gyakorisága évtizedenként. A jelmagyarázatra kattintva
-    ki-/bekapcsolhatók a görbék.</p>
+  <p class="note">BERTopic témák évtizedenként — válts a dalok darabszáma és az
+    évtizeden belüli arány között. A jelmagyarázatra kattintva ki-/bekapcsolhatók
+    a görbék.</p>
+  <div id="c-topics-metric" class="controls"></div>
   <div id="c-topics-legend" class="legend"></div>
   <div id="c-topics"></div>
   <h3>Témakártyák</h3>
-  <div id="c-topic-cards" class="cards"></div>
+  <div id="c-topic-controls" class="controls"></div>
+  <div id="c-topic-cards"></div>
 </section>
 
 <section id="change"><h2>Jelentésváltozás az időben</h2>
@@ -111,18 +261,31 @@
 </section>
 
 <section id="neighbors"><h2>Szomszédos szavak korszakonként</h2>
-  <p class="note">Egy célszó legközelebbi szomszédai az egyes évtizedek modelljében.</p>
+  <p class="note">Egy célszó társszavai egy adott évtizedben: a középső csomópont a
+    célszó, körülötte a legerősebben együtt-előforduló szavak. Az élek vastagsága
+    a kapcsolat erősségét (relatív együtt-előfordulás) jelzi.</p>
+  <div id="c-neighbors-controls" class="controls"></div>
   <div id="c-neighbors"></div>
+  <p class="note" id="c-neighbors-cta"></p>
 </section>
 
 <section id="stats"><h2>Szókincs- és modell-statisztika</h2>
+  <p class="note">Évtizedenkénti szókincsméret és lexikai változatosság. A lexikai
+    változatosság <strong>MATTR</strong> (100 szavas mozgóablakos típus–token arány):
+    mekkora arányban különböznek a szavak egy 100 szavas szakaszon belül — a
+    szöveghossztól független mérőszám (0–1, a magasabb változatosabb).</p>
   <div id="c-vocab"></div>
-  <h3>Igazítási minőség</h3>
-  <div id="c-align"></div>
 </section>
 
 <section id="method"><h2>Módszertan</h2>
-  <p>A dalszövegek a zeneszoveg.hu oldalról származnak, évtizedekre bontva.
+  <p>A dalszövegek elsősorban a <strong>zeneszoveg.hu</strong> oldalról származnak,
+    kiegészítve egy Genius-alapú (Kaggle) magyar dalszöveg-gyűjteménnyel. A dalok
+    évtizedekre bontásához a megjelenési évet több forrásból, prioritási sorrendben
+    állítjuk össze: <strong>MusicBrainz</strong> (első megjelenés dátuma és a
+    kompozíció [work] azonosítója, amely a feldolgozásokat is összekapcsolja),
+    <strong>Discogs</strong>, a Genius-évszám, végül a zeneszoveg.hu oldal éve
+    (utóbbi kettő kevésbé megbízható). Az előadói és zeneszerzői metaadatokat
+    <strong>Wikidata</strong> és a magyar Wikipédia egészíti ki.
     A korpusz nyelvfelismeréssel (magyar) szűrt, MinHash-LSH duplikátum-mentesített;
     a számláló réteg huspacy lemmákból és gensim n-gramokból épül.
     A témákat <em>BERTopic</em> adja magyar huBERT beágyazásokkal (128 tokenes
@@ -130,17 +293,35 @@
     A téma-elnevezéseket kézzel adtuk a kulcsszavak alapján.
     A jelentésváltozást a <em>chronowords</em> SVD-beágyazásai mérik, évtizedenként
     tanítva és Procrustes-igazítással összevetve.</p>
-  <p class="note">Az 1980 előtti évtizedek ritkák; a diakronikus modellek főként az
-    1990-es évektől megbízhatók. A megjelenített mutatók aggregáltak — a dashboard
-    sosem közöl teljes dalszöveget.</p>
+  <p class="note">A dashboard az 1960-as évektől a 2020-as évekig fedi le az
+    anyagot; a korábbi, ritka évtizedeket elhagytuk. A diakronikus modellek főként
+    az 1990-es évektől megbízhatók. A megjelenített mutatók aggregáltak — a
+    dashboard sosem közöl teljes dalszöveget.</p>
+  <p class="note">Korábbi (2020-as) változat:
+    <a href="https://blog.crowintelligence.org/hu/2020/08/19/hatvan-ev-dalszovegei/"
+       target="_blank" rel="noopener">„Ezek minden idők leggyakoribb és legfontosabb
+    szavai a magyar popslágerekben” — Crow Intelligence, 2020</a>.
+    Kapcsolódó kutatás (HuMus): Bodó Z., Szenkovits A. &amp; Pătcaş Cs.,
+    <a href="https://doi.org/10.1007/s44427-026-00030-x" target="_blank" rel="noopener"><em>The
+    HuMus Project: Corpus Compilation and Multi-experiment Study of Hungarian
+    Popular Music Lyrics</em></a>, Acta Universitatis Sapientiae, Informatica (2026).</p>
 </section>
+</main>
 
 <footer>Crow Intelligence · music_networks · statikus dashboard (inline SVG, nincs külső függőség)</footer>
 
 <script>
 const DATA = /*__DATA__*/;
-const PALETTE = ["#7a1f1f","#2f5d50","#9a6a1f","#3a4a7a","#6a2f5d","#4a6a2f",
-                 "#8a3a3a","#2f6a6a","#7a5a1f","#5a3a6a","#3a7a4a","#6a4a2a"];
+// Ordered categorical palette — read from CSS custom properties so the same
+// series keeps the same color across every chart and matches the design tokens.
+const CSS = getComputedStyle(document.documentElement);
+const cssVar = (n, fallback) => (CSS.getPropertyValue(n).trim() || fallback);
+const PALETTE = ["--c1","--c2","--c3","--c4","--c5","--c6","--c7","--c8"]
+  .map((v, i) => cssVar(v, ["#7a1f1f","#2f5d50","#856404","#34568b","#7d3c98","#486b2f","#a8431a","#2a6f7a"][i]));
+const CTX_COLOR = cssVar("--ctx", "#b6b0a2");
+const MUTED = cssVar("--muted", "#5a5346");
+const INK = cssVar("--ink", "#1a1a17");
+const PAPER = cssVar("--paper", "#f7f5ef");
 const SVGNS = "http://www.w3.org/2000/svg";
 
 function s(tag, attrs={}, kids=[]) {
@@ -155,107 +336,351 @@ function empty(id, msg) {
 }
 function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; }
 
+// ---- shared tooltip (one element, reused by every chart) ----
+const TIP = (() => {
+  const el = document.createElement("div");
+  el.className = "tooltip"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite");
+  document.body.appendChild(el);
+  return el;
+})();
+function tipShow(html, ev) {
+  TIP.innerHTML = html; TIP.style.opacity = "1";
+  tipMove(ev);
+}
+function tipMove(ev) {
+  const pad = 14, w = TIP.offsetWidth, h = TIP.offsetHeight;
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if (x + w > window.innerWidth) x = ev.clientX - w - pad;
+  if (y + h > window.innerHeight) y = ev.clientY - h - pad;
+  TIP.style.left = Math.max(4, x) + "px"; TIP.style.top = Math.max(4, y) + "px";
+}
+function tipHide() { TIP.style.opacity = "0"; }
+// Attach hover + touch tooltip behavior to an SVG element.
+function bindTip(node, html) {
+  node.addEventListener("mouseenter", e => tipShow(html, e));
+  node.addEventListener("mousemove", tipMove);
+  node.addEventListener("mouseleave", tipHide);
+  node.addEventListener("touchstart", e => { if (e.touches[0]) tipShow(html, e.touches[0]); }, {passive: true});
+}
+// Linear interpolation between two hex colors, t in [0,1] → "#rrggbb".
+function lerpColor(a, b, t) {
+  const pa = [1,3,5].map(i => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1,3,5].map(i => parseInt(b.slice(i, i + 2), 16));
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return "#" + c.map(v => v.toString(16).padStart(2, "0")).join("");
+}
+// Reusable segmented toggle. options: [{label, value}]; first is selected.
+function makeToggle(options, onSelect, ariaLabel) {
+  const box = document.createElement("div"); box.className = "toggle";
+  box.setAttribute("role", "group"); if (ariaLabel) box.setAttribute("aria-label", ariaLabel);
+  const btns = options.map((o, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = o.label;
+    b.setAttribute("aria-pressed", String(i === 0));
+    b.addEventListener("click", () => { btns.forEach((x, j) => x.setAttribute("aria-pressed", String(j === i))); onSelect(o.value, i); });
+    box.appendChild(b); return b;
+  });
+  return box;
+}
+// Relative luminance (WCAG) of a #rrggbb color → 0..1.
+function luminance(hex) {
+  const ch = [1,3,5].map(i => {
+    let v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
 // ---- grouped bar chart (overview) ----
 function groupedBars(id, rows, series) {
+  const host = document.getElementById(id);
   if (!rows.length) { empty(id, "Nincs adat — előbb építsd a korpuszt."); return; }
-  const W = 1000, H = 360, m = {t: 16, r: 12, b: 46, l: 56};
+  // Legend above the plot, wrapping with adequate spacing.
+  const leg = document.createElement("div"); leg.className = "legend";
+  series.forEach(k => { const sp = document.createElement("span");
+    sp.innerHTML = `<span class="sw" style="background:${k.color}"></span>${k.label}`; leg.appendChild(sp); });
+  host.appendChild(leg);
+
+  const W = 1000, H = 380, m = {t: 16, r: 14, b: 52, l: 70};
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const max = niceMax(Math.max(...rows.flatMap(r => series.map(k => r[k.key]))));
-  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
+    "aria-label": `Csoportosított oszlopdiagram: ${series.map(k => k.label).join(", ")} évtizedenként.`});
   const g = s("g", {transform: `translate(${m.l},${m.t})`});
   for (let t = 0; t <= 4; t++) {
     const y = ih - (ih * t / 4), val = Math.round(max * t / 4);
     g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
-    g.appendChild(s("text", {x: -8, y: y + 4, "text-anchor": "end", fill: "#6c6555", "font-size": 11}, String(val)));
+    g.appendChild(s("text", {x: -10, y: y + 4, "text-anchor": "end", fill: MUTED, "font-size": 12}, val.toLocaleString("hu")));
   }
+  // Y-axis unit label.
+  g.appendChild(s("text", {x: -m.l + 16, y: ih / 2, "text-anchor": "middle", fill: MUTED, "font-size": 12,
+    transform: `rotate(-90 ${-m.l + 16} ${ih / 2})`}, "darabszám"));
   const bw = iw / rows.length, inner = bw * 0.74, sw = inner / series.length;
   rows.forEach((r, i) => {
     const x0 = i * bw + (bw - inner) / 2;
     series.forEach((k, j) => {
       const h = ih * (r[k.key] / max);
-      g.appendChild(s("rect", {x: x0 + j * sw, y: ih - h, width: sw - 1.5, height: h, fill: k.color}));
+      const rect = s("rect", {x: x0 + j * sw, y: ih - h, width: sw - 1.5, height: h, fill: k.color,
+        role: "img", "aria-label": `${r.decade}s, ${k.label}: ${r[k.key]}`});
+      g.appendChild(rect);
+      bindTip(rect, `<b>${r.decade}s</b> · ${k.label}<br>${(+r[k.key]).toLocaleString("hu")}`);
     });
     const label = r.decade + "s" + (r.low_n ? " ★" : "");
-    g.appendChild(s("text", {x: i * bw + bw / 2, y: ih + 16, "text-anchor": "middle",
-      fill: r.low_n ? "#7a1f1f" : "#6c6555", "font-size": 11}, label));
+    g.appendChild(s("text", {x: i * bw + bw / 2, y: ih + 18, "text-anchor": "middle",
+      fill: r.low_n ? "var(--accent)" : MUTED, "font-size": 12}, label));
   });
   svg.appendChild(g);
-  document.getElementById(id).appendChild(svg);
-  const leg = document.createElement("div"); leg.className = "legend";
-  series.forEach(k => { const sp = document.createElement("span");
-    sp.innerHTML = `<span class="sw" style="background:${k.color}"></span>${k.label}`; leg.appendChild(sp); });
-  document.getElementById(id).appendChild(leg);
+  const scroll = document.createElement("div"); scroll.className = "chart-scroll";
+  scroll.appendChild(svg); host.appendChild(scroll);
 }
 
-// ---- multi-line chart with toggleable legend ----
-function multiLine(id, legendId, labels, lines, yMaxOpt) {
+// ---- multi-line chart: emphasis, hover-highlight, toggle legend,
+//      end-of-line labels, small-multiples view ----
+function multiLine(id, legendId, labels, lines, opts = {}) {
   const host = document.getElementById(id);
   if (!lines.length || !labels.length) { empty(id, "Nincs adat — előbb futtasd az elemzést."); return; }
-  const W = 1000, H = 380, m = {t: 16, r: 14, b: 40, l: 50};
+  const yUnit = opts.yUnit || "";
+  const fmt = opts.fmt || (v => (+v).toFixed(2));
+  const emphasizeN = opts.emphasize || 6;
+  const rotateX = !!opts.rotateX;
+  const yMax = opts.yMax != null ? opts.yMax
+    : niceMax(Math.max(0.0001, ...lines.flatMap(l => l.values.filter(v => v != null))));
+
+  // Stable palette slot per series (same series = same color across charts);
+  // emphasize the top-N by peak value, the rest render as muted context.
+  const peak = ln => Math.max(0, ...ln.values.filter(v => v != null));
+  const emph = new Set(lines.map((l, i) => [i, peak(l)]).sort((a, b) => b[1] - a[1])
+    .slice(0, emphasizeN).map(o => o[0]));
+  lines.forEach((ln, i) => {
+    ln._pal = ln.color || PALETTE[i % PALETTE.length];
+    ln._emph = emph.has(i);
+    ln._vis = true;
+  });
+
+  const W = 1000, H = 400, m = {t: 16, r: 132, b: rotateX ? 70 : 44, l: 64};
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
-  const allY = lines.flatMap(l => l.values.filter(v => v != null));
-  const yMax = yMaxOpt != null ? yMaxOpt : niceMax(Math.max(0.0001, ...allY));
   const xOf = i => labels.length === 1 ? iw / 2 : (iw * i / (labels.length - 1));
   const yOf = v => ih - ih * (v / yMax);
-  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+
+  // ---- view container + toggle (overlaid ⇄ small multiples) ----
+  const wrap = document.createElement("div");
+  const toggle = document.createElement("div");
+  toggle.className = "toggle"; toggle.setAttribute("role", "group");
+  toggle.setAttribute("aria-label", "Nézetváltó");
+  const bOver = document.createElement("button"); bOver.textContent = "Átfedő"; bOver.setAttribute("aria-pressed", "true");
+  const bMul = document.createElement("button"); bMul.textContent = "Kis többszörös"; bMul.setAttribute("aria-pressed", "false");
+  toggle.append(bOver, bMul);
+  const overBox = document.createElement("div"); overBox.className = "chart-scroll";
+  const mulBox = document.createElement("div"); mulBox.style.display = "none";
+  wrap.append(toggle, overBox, mulBox);
+  host.appendChild(wrap);
+  // Pull the (separately-placed) legend into the wrap, just below the toggle.
+  if (legendId) { const le = document.getElementById(legendId); if (le) wrap.insertBefore(le, overBox); }
+
+  // ---- overlaid view ----
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
+    "aria-label": `Vonaldiagram: ${lines.length} sorozat, ${labels[0]}–${labels[labels.length - 1]}.`});
   const g = s("g", {transform: `translate(${m.l},${m.t})`});
   for (let t = 0; t <= 4; t++) {
     const y = ih - ih * t / 4;
     g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
-    g.appendChild(s("text", {x: -8, y: y + 4, "text-anchor": "end", fill: "#6c6555", "font-size": 11}, (yMax * t / 4).toFixed(2)));
+    g.appendChild(s("text", {x: -10, y: y + 4, "text-anchor": "end", fill: MUTED, "font-size": 12}, fmt(yMax * t / 4)));
   }
-  labels.forEach((lab, i) => g.appendChild(s("text", {x: xOf(i), y: ih + 16, "text-anchor": "middle", fill: "#6c6555", "font-size": 11}, lab)));
-  const paths = {};
-  lines.forEach((ln, idx) => {
-    const col = ln.color || PALETTE[idx % PALETTE.length];
-    let d = "", started = false;
-    ln.values.forEach((v, i) => { if (v == null) { started = false; return; }
-      d += (started ? " L" : " M") + xOf(i) + " " + yOf(v); started = true; });
-    const p = s("path", {d: d.trim(), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round"});
-    g.appendChild(p); paths[ln.name] = p;
-    ln.values.forEach((v, i) => { if (v != null) g.appendChild(s("circle", {cx: xOf(i), cy: yOf(v), r: 2.4, fill: col})); });
+  labels.forEach((lab, i) => {
+    const tx = s("text", {x: xOf(i), y: ih + (rotateX ? 14 : 18), "text-anchor": rotateX ? "end" : "middle",
+      fill: MUTED, "font-size": 12}, lab);
+    if (rotateX) tx.setAttribute("transform", `rotate(-35 ${xOf(i)} ${ih + 14})`);
+    g.appendChild(tx);
   });
-  svg.appendChild(g); host.appendChild(svg);
+  if (yUnit) g.appendChild(s("text", {x: -m.l + 14, y: ih / 2, "text-anchor": "middle", fill: MUTED, "font-size": 12,
+    transform: `rotate(-90 ${-m.l + 14} ${ih / 2})`}, yUnit));
+
+  const paths = [];
+  const pathFor = ln => { let d = "", st = false;
+    ln.values.forEach((v, i) => { if (v == null) { st = false; return; } d += (st ? " L" : " M") + xOf(i) + " " + yOf(v); st = true; });
+    return d.trim(); };
+  // Context lines underneath, emphasized lines on top.
+  lines.forEach((ln, idx) => {
+    const col = ln._emph ? ln._pal : CTX_COLOR;
+    const p = s("path", {d: pathFor(ln), fill: "none", stroke: col,
+      "stroke-width": ln._emph ? 2.4 : 1.2, "stroke-linejoin": "round",
+      "stroke-opacity": ln._emph ? 1 : 0.55});
+    p.style.cursor = "pointer";
+    g.appendChild(p);
+    const pts = [];
+    if (ln._emph) ln.values.forEach((v, i) => { if (v != null) {
+      const c = s("circle", {cx: xOf(i), cy: yOf(v), r: 2.6, fill: ln._pal});
+      g.appendChild(c); pts.push(c);
+      bindTip(c, `<b>${ln.name}</b><br>${labels[i]}: ${fmt(v)}`);
+    }});
+    paths.push({ln, p, pts, idx});
+    p.addEventListener("mouseenter", () => highlight(idx));
+    p.addEventListener("mouseleave", () => highlight(null));
+    bindTip(p, `<b>${ln.name}</b>`);
+  });
+
+  // End-of-line direct labels (emphasized + visible), greedy collision avoidance.
+  const labLayer = s("g");
+  function lastPoint(ln) { for (let i = ln.values.length - 1; i >= 0; i--) if (ln.values[i] != null) return {i, v: ln.values[i]}; return null; }
+  function drawEndLabels() {
+    while (labLayer.firstChild) labLayer.removeChild(labLayer.firstChild);
+    const items = [];
+    paths.forEach(({ln}) => { if (!ln._emph || !ln._vis) return; const lp = lastPoint(ln); if (!lp) return;
+      items.push({name: ln.name, y: yOf(lp.v), col: ln._pal}); });
+    items.sort((a, b) => a.y - b.y);
+    let prev = -1e9; const minGap = 14;
+    items.forEach(it => { let y = Math.max(it.y, prev + minGap); prev = y;
+      const t = s("text", {x: iw + 8, y: y + 4, "text-anchor": "start", fill: it.col, "font-size": 12},
+        it.name.length > 16 ? it.name.slice(0, 15) + "…" : it.name);
+      labLayer.appendChild(t); });
+  }
+  drawEndLabels();
+
+  function highlight(idx) {
+    paths.forEach(o => {
+      const on = idx == null ? o.ln._emph : o.idx === idx;
+      o.p.setAttribute("stroke", o.idx === idx ? o.ln._pal : (o.ln._emph ? o.ln._pal : CTX_COLOR));
+      o.p.setAttribute("stroke-opacity", idx == null ? (o.ln._emph ? 1 : 0.55) : (o.idx === idx ? 1 : 0.12));
+      o.p.setAttribute("stroke-width", o.idx === idx ? 3.2 : (o.ln._emph ? 2.4 : 1.2));
+      o.pts.forEach(c => c.setAttribute("opacity", idx == null ? 1 : (o.idx === idx ? 1 : 0.12)));
+    });
+  }
+  g.appendChild(labLayer);
+  svg.appendChild(g); overBox.appendChild(svg);
+
+  // ---- legend: toggle visibility + hover/focus highlight, keyboard-operable ----
   if (legendId) {
     const leg = document.getElementById(legendId);
     lines.forEach((ln, idx) => {
-      const col = ln.color || PALETTE[idx % PALETTE.length];
+      const col = ln._emph ? ln._pal : CTX_COLOR;
       const sp = document.createElement("span");
+      sp.tabIndex = 0; sp.setAttribute("role", "button"); sp.setAttribute("aria-pressed", "true");
+      sp.setAttribute("aria-label", `${ln.name} sorozat ki-/bekapcsolása`);
       sp.innerHTML = `<span class="sw" style="background:${col}"></span>${ln.name}`;
-      sp.onclick = () => { sp.classList.toggle("off"); const off = sp.classList.contains("off");
-        paths[ln.name].style.display = off ? "none" : ""; };
+      const setVis = () => {
+        ln._vis = !ln._vis;
+        sp.classList.toggle("off", !ln._vis);
+        sp.setAttribute("aria-pressed", String(ln._vis));
+        paths[idx].p.style.display = ln._vis ? "" : "none";
+        paths[idx].pts.forEach(c => c.style.display = ln._vis ? "" : "none");
+        drawEndLabels();
+      };
+      sp.addEventListener("click", setVis);
+      sp.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setVis(); } });
+      sp.addEventListener("mouseenter", () => highlight(idx));
+      sp.addEventListener("mouseleave", () => highlight(null));
+      sp.addEventListener("focus", () => highlight(idx));
+      sp.addEventListener("blur", () => highlight(null));
       leg.appendChild(sp);
     });
   }
+
+  // ---- small multiples (built lazily on first switch) ----
+  let mulBuilt = false;
+  function buildMultiples() {
+    if (mulBuilt) return; mulBuilt = true;
+    const grid = document.createElement("div"); grid.className = "cards";
+    const mw = 300, mh = 150, mm = {t: 10, r: 10, b: 22, l: 34};
+    const miw = mw - mm.l - mm.r, mih = mh - mm.t - mm.b;
+    const mxOf = i => labels.length === 1 ? miw / 2 : (miw * i / (labels.length - 1));
+    const myOf = v => mih - mih * (v / yMax);
+    lines.forEach(ln => {
+      if (!ln._vis) return;
+      const card = document.createElement("figure"); card.className = "card"; card.style.margin = "0";
+      const ms = s("svg", {viewBox: `0 0 ${mw} ${mh}`, role: "img", "aria-label": `${ln.name} – kis diagram`});
+      const mg = s("g", {transform: `translate(${mm.l},${mm.t})`});
+      [0, 0.5, 1].forEach(t => { const y = mih - mih * t;
+        mg.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: miw, y2: y}));
+        mg.appendChild(s("text", {x: -6, y: y + 3, "text-anchor": "end", fill: MUTED, "font-size": 9}, fmt(yMax * t))); });
+      [0, labels.length - 1].forEach(i => mg.appendChild(s("text", {x: mxOf(i), y: mih + 14,
+        "text-anchor": i === 0 ? "start" : "end", fill: MUTED, "font-size": 9}, labels[i])));
+      let d = "", st = false; ln.values.forEach((v, i) => { if (v == null) { st = false; return; }
+        d += (st ? " L" : " M") + mxOf(i) + " " + myOf(v); st = true; });
+      mg.appendChild(s("path", {d: d.trim(), fill: "none", stroke: ln._pal, "stroke-width": 2}));
+      ln.values.forEach((v, i) => { if (v != null) mg.appendChild(s("circle", {cx: mxOf(i), cy: myOf(v), r: 2, fill: ln._pal})); });
+      ms.appendChild(mg);
+      const cap = document.createElement("figcaption"); cap.className = "tname";
+      cap.style.fontSize = "0.95rem"; cap.textContent = ln.name;
+      card.append(cap, ms); grid.appendChild(card);
+    });
+    mulBox.appendChild(grid);
+  }
+  function show(which) {
+    const over = which === "over";
+    bOver.setAttribute("aria-pressed", String(over)); bMul.setAttribute("aria-pressed", String(!over));
+    overBox.style.display = over ? "" : "none"; mulBox.style.display = over ? "none" : "";
+    if (legendId) document.getElementById(legendId).style.display = over ? "" : "none";
+    if (!over) buildMultiples();
+  }
+  bOver.addEventListener("click", () => show("over"));
+  bMul.addEventListener("click", () => show("mul"));
 }
 
-// ---- heatmap ----
-function heatmap(id, rows, cols, values) {
+// ---- heatmap (sequential reds, column headers, legend, tooltips) ----
+const HEAT_MIN = cssVar("--heat-min", "#fdece1");
+const HEAT_MAX = cssVar("--heat-max", "#7a1f1f");
+// Map a value in [0,vMax] to a color on the sequential reds ramp.
+function heatColor(v, vMax) { return lerpColor(HEAT_MIN, HEAT_MAX, vMax > 0 ? v / vMax : 0); }
+
+function heatmap(id, rows, cols, values, opts = {}) {
+  const host = document.getElementById(id);
   if (!rows.length || !cols.length) { empty(id, "Nincs adat — előbb futtasd az elemzést."); return; }
-  const cell = 46, labelW = 120, headH = 60, W = labelW + cols.length * cell + 12, H = headH + rows.length * cell + 8;
+  const rowLabel = opts.rowLabel || "Szó", colLabel = opts.colLabel || "Átmenet";
+  const valLabel = opts.valLabel || "érték";
+  const cell = 50, labelW = 130, headH = 64, W = labelW + cols.length * cell + 14, H = headH + rows.length * cell + 10;
   const flat = values.flat().filter(v => v != null);
   const vMax = Math.max(0.0001, ...flat);
-  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
-  cols.forEach((c, j) => svg.appendChild(s("text", {x: labelW + j * cell + cell / 2, y: headH - 8,
-    "text-anchor": "end", fill: "#6c6555", "font-size": 10,
-    transform: `rotate(-40 ${labelW + j * cell + cell / 2} ${headH - 8})`}, c)));
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
+    "aria-label": `Hőtérkép: ${rows.length} ${rowLabel.toLowerCase()} × ${cols.length} ${colLabel.toLowerCase()}.`});
+  // Column headers (decade transitions), rotated to avoid collision.
+  cols.forEach((c, j) => {
+    const cx = labelW + j * cell + cell / 2;
+    svg.appendChild(s("text", {x: cx, y: headH - 10, "text-anchor": "start", fill: MUTED, "font-size": 11,
+      transform: `rotate(-35 ${cx} ${headH - 10})`}, c));
+  });
   rows.forEach((r, i) => {
-    svg.appendChild(s("text", {x: labelW - 8, y: headH + i * cell + cell / 2 + 4, "text-anchor": "end", fill: "#1a1a17", "font-size": 12}, r));
+    svg.appendChild(s("text", {x: labelW - 8, y: headH + i * cell + cell / 2 + 4, "text-anchor": "end", fill: INK, "font-size": 13}, r));
     cols.forEach((c, j) => {
       const v = values[i][j];
       const x = labelW + j * cell, y = headH + i * cell;
       if (v == null) {
-        svg.appendChild(s("rect", {x, y, width: cell - 2, height: cell - 2, fill: "#efe9da"}));
-        svg.appendChild(s("text", {x: x + cell / 2, y: y + cell / 2 + 3, "text-anchor": "middle", fill: "#b8b0a0", "font-size": 10}, "·"));
+        // NA cell: hatched + distinct from a real 0 value.
+        const rect = s("rect", {x, y, width: cell - 2, height: cell - 2, fill: "#efe9da",
+          stroke: "#d8d0bf", "stroke-dasharray": "3 2"});
+        svg.appendChild(rect);
+        svg.appendChild(s("text", {x: x + cell / 2, y: y + cell / 2 + 4, "text-anchor": "middle", fill: "#a89f8c", "font-size": 11}, "n/a"));
+        bindTip(rect, `<b>${r}</b> · ${c}<br>nincs adat`);
       } else {
-        const a = 0.12 + 0.88 * (v / vMax);
-        svg.appendChild(s("rect", {x, y, width: cell - 2, height: cell - 2, fill: "#7a1f1f", "fill-opacity": a.toFixed(3)}));
-        svg.appendChild(s("text", {x: x + cell / 2, y: y + cell / 2 + 3, "text-anchor": "middle",
-          fill: a > 0.55 ? "#f7f5ef" : "#1a1a17", "font-size": 10}, v.toFixed(2)));
+        const fill = heatColor(v, vMax);
+        const rect = s("rect", {x, y, width: cell - 2, height: cell - 2, fill});
+        svg.appendChild(rect);
+        // Light/dark label by cell luminance so text stays AA-legible.
+        const txt = luminance(fill) < 0.5 ? PAPER : INK;
+        svg.appendChild(s("text", {x: x + cell / 2, y: y + cell / 2 + 4, "text-anchor": "middle",
+          fill: txt, "font-size": 11, "pointer-events": "none"}, v.toFixed(2)));
+        bindTip(rect, `<b>${r}</b> · ${c}<br>${valLabel}: ${v.toFixed(3)}`);
       }
     });
   });
-  document.getElementById(id).appendChild(svg);
+  const scroll = document.createElement("div"); scroll.className = "chart-scroll";
+  scroll.appendChild(svg); host.appendChild(scroll);
+  heatLegend(host, vMax, valLabel);
+}
+
+// Horizontal gradient scale legend for the heatmap.
+function heatLegend(host, vMax, valLabel) {
+  const W = 280, H = 46, barW = 220, barH = 12, x0 = 8;
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Színskála: ${valLabel}, 0-tól ${vMax.toFixed(2)}-ig.`});
+  svg.setAttribute("style", "max-width:280px;margin-top:8px");
+  const defs = s("defs"); const gid = "heatgrad";
+  const grad = s("linearGradient", {id: gid, x1: "0", y1: "0", x2: "1", y2: "0"});
+  grad.appendChild(s("stop", {offset: "0%", "stop-color": HEAT_MIN}));
+  grad.appendChild(s("stop", {offset: "100%", "stop-color": HEAT_MAX}));
+  defs.appendChild(grad); svg.appendChild(defs);
+  svg.appendChild(s("rect", {x: x0, y: 6, width: barW, height: barH, fill: `url(#${gid})`, stroke: "var(--line)"}));
+  svg.appendChild(s("text", {x: x0, y: 34, "text-anchor": "start", fill: MUTED, "font-size": 11}, "0,00"));
+  svg.appendChild(s("text", {x: x0 + barW, y: 34, "text-anchor": "end", fill: MUTED, "font-size": 11}, vMax.toFixed(2)));
+  svg.appendChild(s("text", {x: x0 + barW / 2, y: 34, "text-anchor": "middle", fill: MUTED, "font-size": 11}, valLabel));
+  host.appendChild(svg);
 }
 
 function table(id, headers, rows) {
@@ -268,6 +693,56 @@ function table(id, headers, rows) {
   document.getElementById(id).appendChild(t);
 }
 
+// ---- fixed-radial ego network (§8): seed at centre, neighbours on rings ----
+const EGO_SEED_COLOR = cssVar("--c1", "#7a1f1f");
+const EGO_NODE_COLOR = cssVar("--c2", "#2f5d50");
+function egoSVG(graph, seed, count) {
+  const W = 720, H = 540, cx = W / 2, cy = H / 2;
+  const all = graph.adj[seed] || [];
+  const list = all.slice(0, count);
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-hidden": "true"});
+  if (!list.length) {
+    svg.appendChild(s("text", {x: cx, y: cy, "text-anchor": "middle", fill: MUTED, "font-size": 16}, "Nincs kapcsolat ehhez a szóhoz."));
+    return svg;
+  }
+  const maxW = Math.max(...list.map(e => e[1]), 1e-12);
+  const maxF = Math.max(...list.map(e => graph.nodes[e[0]] || 0), 1);
+  // One ring up to 8, otherwise inner 8 + outer ring by rank.
+  const inner = list.slice(0, 8), outer = list.slice(8);
+  const pos = [];
+  const ring = (arr, R, base) => arr.forEach((e, i) => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i / arr.length);
+    pos.push({e, x: cx + R * Math.cos(a), y: cy + R * Math.sin(a)});
+  });
+  ring(inner, outer.length ? 150 : 175, 0); ring(outer, 245, 0);
+  // Edges first (under nodes).
+  pos.forEach(({e, x, y}) => {
+    const r = e[1] / maxW;
+    const ln = s("line", {x1: cx, y1: cy, x2: x, y2: y, stroke: EGO_SEED_COLOR,
+      "stroke-width": (1.4 + 6 * r).toFixed(2), "stroke-opacity": (0.22 + 0.6 * r).toFixed(2),
+      "stroke-linecap": "round"});
+    ln.style.cursor = "pointer";
+    bindTip(ln, `<b>${seed}</b> — ${e[0]}<br>kapcsolaterősség: ${Math.round(100 * r)}%`);
+    svg.appendChild(ln);
+  });
+  // Neighbour nodes + labels.
+  pos.forEach(({e, x, y}) => {
+    const f = graph.nodes[e[0]] || 0;
+    const nr = 7 + 15 * Math.sqrt(f / maxF);
+    const c = s("circle", {cx: x, cy: y, r: nr.toFixed(1), fill: EGO_NODE_COLOR, "fill-opacity": 0.92});
+    c.style.cursor = "pointer";
+    bindTip(c, `<b>${e[0]}</b><br>előfordulás: ${f.toLocaleString("hu")}<br>kapcsolaterősség: ${Math.round(100 * e[1] / maxW)}%`);
+    svg.appendChild(c);
+    const right = x >= cx;
+    svg.appendChild(s("text", {x: x + (right ? nr + 5 : -nr - 5), y: y + 4,
+      "text-anchor": right ? "start" : "end", fill: INK, "font-size": 14}, e[0]));
+  });
+  // Seed node on top.
+  svg.appendChild(s("circle", {cx, cy, r: 28, fill: EGO_SEED_COLOR}));
+  svg.appendChild(s("text", {x: cx, y: cy + 5, "text-anchor": "middle", fill: PAPER, "font-size": 15}, seed));
+  return svg;
+}
+
 // ===== render =====
 (function render() {
   // Overview
@@ -278,36 +753,117 @@ function table(id, headers, rows) {
     {key: "composers", label: "Zeneszerzők", color: PALETTE[3]},
   ]);
 
-  // Keyness
+  // Keyness — per-decade era word cloud (image) + ranked list (analytical /
+  // screen-reader fallback), switched by a "felhő / lista" toggle.
   const kn = DATA.keyness || [];
   if (!kn.length) empty("c-keyness", "Nincs adat — előbb építsd a korpuszt.");
   kn.forEach(d => {
-    const div = document.createElement("div");
-    div.innerHTML = `<h3>${d.decade}s</h3>` +
-      d.terms.map(t => `<div>${t.term} <span class="pill">G² ${t.log_likelihood}</span></div>`).join("");
-    document.getElementById("c-keyness").appendChild(div);
+    const fig = document.createElement("figure"); fig.className = "cloud-fig";
+    const head = document.createElement("h3"); head.textContent = d.decade + "s"; fig.appendChild(head);
+
+    const cloudWrap = document.createElement("div");
+    if (d.cloud) {
+      const img = document.createElement("img");
+      img.className = "cloud-img"; img.src = "assets/clouds/" + d.cloud.file;
+      img.loading = "lazy"; img.alt = ""; img.setAttribute("aria-hidden", "true");
+      img.width = d.cloud.width; img.height = d.cloud.height;
+      const cap = document.createElement("figcaption"); cap.className = "note";
+      cap.textContent = `${d.decade}-es évek · ${d.cloud.n} megkülönböztető szó · ${d.cloud.font} · a betűméret a megkülönböztető-erőt (G²) kódolja`;
+      cloudWrap.append(img, cap);
+    }
+    // Ranked list (the canonical, accessible content).
+    const listWrap = document.createElement("div");
+    const ol = document.createElement("ol"); ol.className = "rank";
+    d.terms.forEach(t => {
+      const li = document.createElement("li");
+      li.innerHTML = `${t.term.replace(/_/g, " ")} <span class="pill" title="log-likelihood">G² ${t.log_likelihood}</span>`;
+      ol.appendChild(li);
+    });
+    listWrap.appendChild(ol);
+
+    if (d.cloud) {
+      const setView = v => {
+        const cloud = v === "cloud";
+        cloudWrap.style.display = cloud ? "" : "none";
+        // In cloud mode keep the list in the a11y tree (visually hidden) so
+        // screen readers still get the full ranking; otherwise show it.
+        listWrap.classList.toggle("visually-hidden", cloud);
+      };
+      fig.appendChild(makeToggle(
+        [{label: "Felhő", value: "cloud"}, {label: "Lista", value: "list"}],
+        setView, `${d.decade}s nézetváltó`));
+      fig.append(cloudWrap, listWrap);
+      setView("cloud");
+    } else {
+      fig.appendChild(listWrap);
+    }
+    document.getElementById("c-keyness").appendChild(fig);
   });
 
-  // Topics over time
+  // Topics over time — count vs. within-decade proportion, re-rendered on toggle.
   const info = (DATA.topics && DATA.topics.info) || [];
   const ot = (DATA.topics && DATA.topics.over_time) || [];
   const nameOf = {}; info.forEach(t => nameOf[t.topic_id] = t.name);
-  const decades = [...new Set(ot.map(r => r.decade))].sort((a, b) => a - b);
+  const tDecades = [...new Set(ot.map(r => r.decade))].sort((a, b) => a - b);
   const byTopic = {};
   ot.forEach(r => { (byTopic[r.topic_id] = byTopic[r.topic_id] || {})[r.decade] = r.frequency; });
-  const topicLines = Object.keys(byTopic).map(tid => ({
+  // Per-decade totals across all topics → proportions.
+  const decTotal = {};
+  tDecades.forEach(d => decTotal[d] = Object.keys(byTopic).reduce((s, tid) => s + (byTopic[tid][d] || 0), 0));
+  const countLines = Object.keys(byTopic).map(tid => ({
     name: nameOf[tid] || ("#" + tid),
-    values: decades.map(d => byTopic[tid][d] != null ? byTopic[tid][d] : 0),
+    values: tDecades.map(d => byTopic[tid][d] != null ? byTopic[tid][d] : 0),
   }));
-  multiLine("c-topics", "c-topics-legend", decades.map(d => d + "s"), topicLines);
-  if (!info.length) empty("c-topic-cards", "Nincs téma — előbb futtasd a topics_bertopic modellt.");
-  info.forEach((t, i) => {
-    const c = document.createElement("div"); c.className = "card";
-    c.innerHTML = `<div class="tname">${t.name}</div>` +
-      `<div class="pill">${t.size} dal</div>` +
-      `<div class="kw">${(t.keywords || []).slice(0, 8).join(", ")}</div>`;
-    document.getElementById("c-topic-cards").appendChild(c);
-  });
+  const propLines = Object.keys(byTopic).map(tid => ({
+    name: nameOf[tid] || ("#" + tid),
+    values: tDecades.map(d => decTotal[d] ? (byTopic[tid][d] || 0) / decTotal[d] : 0),
+  }));
+  function renderTopicsChart(metric) {
+    const chart = document.getElementById("c-topics");
+    chart.innerHTML = "";
+    // multiLine moves the legend node into its own wrapper, so give it a fresh
+    // empty legend container each time, placed before the chart.
+    const old = document.getElementById("c-topics-legend");
+    if (old) old.remove();
+    const leg = document.createElement("div"); leg.id = "c-topics-legend"; leg.className = "legend";
+    chart.parentNode.insertBefore(leg, chart);
+    if (metric === "prop") {
+      multiLine("c-topics", "c-topics-legend", tDecades.map(d => d + "s"), propLines,
+        {yUnit: "arány (évtizeden belül)", fmt: v => Math.round(v * 100) + "%", emphasize: 6, yMax: 1});
+    } else {
+      multiLine("c-topics", "c-topics-legend", tDecades.map(d => d + "s"), countLines,
+        {yUnit: "dalok száma", fmt: v => String(Math.round(v)), emphasize: 6});
+    }
+  }
+  if (countLines.length) {
+    document.getElementById("c-topics-metric").appendChild(makeToggle(
+      [{label: "Darabszám", value: "count"}, {label: "Arány", value: "prop"}],
+      v => renderTopicsChart(v), "Téma-mérőszám"));
+    renderTopicsChart("count");
+  }
+
+  // Témakártyák — compact: a topic dropdown + a single detail card.
+  if (!info.length) {
+    empty("c-topic-cards", "Nincs téma — előbb futtasd a topics_bertopic modellt.");
+  } else {
+    const byId = {}; info.forEach(t => byId[t.topic_id] = t);
+    const ordered = [...info].sort((a, b) => (b.size || 0) - (a.size || 0));
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Téma");
+    ordered.forEach(t => { const o = document.createElement("option"); o.value = t.topic_id; o.textContent = t.name; sel.appendChild(o); });
+    const lbl = document.createElement("label"); lbl.textContent = "Téma: "; lbl.appendChild(sel);
+    document.getElementById("c-topic-controls").appendChild(lbl);
+    const cardHost = document.getElementById("c-topic-cards");
+    const showTopic = tid => {
+      const t = byId[tid]; cardHost.innerHTML = "";
+      const c = document.createElement("div"); c.className = "card";
+      c.innerHTML = `<div class="tname">${t.name}</div>` +
+        `<div class="pill">${t.size} dal</div>` +
+        `<div class="kw">${(t.keywords || []).join(", ")}</div>`;
+      cardHost.appendChild(c);
+    };
+    sel.addEventListener("change", () => showTopic(sel.value));
+    sel.value = ordered[0].topic_id; showTopic(ordered[0].topic_id);
+  }
 
   const u = DATA.usage || {};
   const trans = u.transitions || [];
@@ -315,46 +871,123 @@ function table(id, headers, rows) {
   // Semantic change
   if (u.semantic_change && u.semantic_change.length) {
     multiLine("c-change", "c-change-legend", trans,
-      u.semantic_change.map(w => ({name: w.word, values: w.shifts.map(s => s.shift)})));
+      u.semantic_change.map(w => ({name: w.word, values: w.shifts.map(s => s.shift)})),
+      {yUnit: "eltérés (1 − koszinusz)", rotateX: true, emphasize: 5});
   } else empty("c-change", "Nincs adat — előbb futtasd a usage_change elemzést.");
 
   // Heatmap
   if (u.shift_heatmap && (u.shift_heatmap.words || []).length) {
-    heatmap("c-heatmap", u.shift_heatmap.words, trans, u.shift_heatmap.values);
+    heatmap("c-heatmap", u.shift_heatmap.words, trans, u.shift_heatmap.values,
+      {rowLabel: "Szó", colLabel: "Átmenet", valLabel: "eltérés-intenzitás (1 − koszinusz)"});
   } else empty("c-heatmap", "Nincs adat — előbb futtasd a usage_change elemzést.");
 
   // Cumulative drift
   if (u.cumulative_drift && u.cumulative_drift.length) {
     multiLine("c-drift", "c-drift-legend", (u.decades || []).map(d => d + "s"),
-      u.cumulative_drift.map(w => ({name: w.word, values: w.drift})));
+      u.cumulative_drift.map(w => ({name: w.word, values: w.drift})),
+      {yUnit: "kumulatív eltérés", emphasize: 5});
   } else empty("c-drift", "Nincs adat — előbb futtasd a usage_change elemzést.");
 
-  // Nearest neighbors
-  if (u.nearest_neighbors && u.nearest_neighbors.length) {
-    u.nearest_neighbors.forEach(w => {
-      const div = document.createElement("div");
-      div.innerHTML = `<h3>${w.word}</h3>`;
-      const wrap = document.createElement("div"); wrap.className = "cols";
-      w.by_decade.forEach(bd => {
-        const col = document.createElement("div");
-        col.innerHTML = `<div class="pill">${bd.decade}s</div>` +
-          bd.neighbors.map(n => `<div>${n.word} <span class="note">${n.similarity}</span></div>`).join("");
-        wrap.appendChild(col);
-      });
-      div.appendChild(wrap);
-      document.getElementById("c-neighbors").appendChild(div);
-    });
-  } else empty("c-neighbors", "Nincs adat — előbb futtasd a usage_change elemzést.");
+  // Szomszédos szavak — kenon ego networks (fixed radial), with decade + seed
+  // pickers and a network/list toggle. Falls back to the cosine nearest-
+  // neighbour lists if the graph artifacts haven't been built.
+  renderNeighbors();
+  function renderNeighbors() {
+    const nets = DATA.networks || {};
+    const graphs = nets.graphs || {};
+    const decades = (nets.decades || []).filter(d => graphs[String(d)] && (graphs[String(d)].seeds || []).length);
+    const host = document.getElementById("c-neighbors");
+    const ctrls = document.getElementById("c-neighbors-controls");
+    if (!decades.length) { neighborsFallback(); return; }
 
-  // Vocab + alignment stats
+    document.getElementById("c-neighbors-cta").textContent =
+      "A teljes, szabadon bejárható szóháló-böngésző külön oldalon készül — hamarosan.";
+
+    let curDecade = decades.includes(2010) ? 2010 : decades[decades.length - 1];
+    let curSeed = null, curCount = 8, curView = "net";
+
+    const decSel = document.createElement("select");
+    decSel.setAttribute("aria-label", "Évtized");
+    decades.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d + "s"; decSel.appendChild(o); });
+    decSel.value = curDecade;
+    const seedSel = document.createElement("select");
+    seedSel.setAttribute("aria-label", "Célszó");
+    const moreBtn = document.createElement("button");
+    moreBtn.type = "button"; moreBtn.className = "btn";
+    const viewTog = makeToggle([{label: "Hálózat", value: "net"}, {label: "Lista", value: "list"}],
+      v => { curView = v; draw(); }, "§8 nézetváltó");
+
+    const lblD = document.createElement("label"); lblD.textContent = "Évtized: "; lblD.appendChild(decSel);
+    const lblS = document.createElement("label"); lblS.textContent = "Célszó: "; lblS.appendChild(seedSel);
+    ctrls.append(lblD, lblS, moreBtn, viewTog);
+
+    function fillSeeds() {
+      const g = graphs[String(curDecade)];
+      const opts = Object.keys(g.adj).sort((a, b) => (g.nodes[b] || 0) - (g.nodes[a] || 0));
+      // Editorial seeds first, then the rest by frequency.
+      const ordered = [...g.seeds, ...opts.filter(w => !g.seeds.includes(w))];
+      seedSel.innerHTML = "";
+      ordered.forEach(w => { const o = document.createElement("option"); o.value = w; o.textContent = w; seedSel.appendChild(o); });
+      if (!ordered.includes(curSeed)) curSeed = g.seeds[0] || ordered[0];
+      seedSel.value = curSeed;
+    }
+    function draw() {
+      const g = graphs[String(curDecade)];
+      const avail = (g.adj[curSeed] || []).length;
+      moreBtn.textContent = curCount < avail ? `Több szomszéd (${avail})` : "Kevesebb";
+      moreBtn.disabled = avail <= 8;
+      host.innerHTML = "";
+      const fig = document.createElement("figure"); fig.className = "ego-fig";
+      const cap = document.createElement("figcaption"); cap.className = "note";
+      const shown = Math.min(curCount, avail);
+      cap.textContent = `„${curSeed}” társszavai (${curDecade}s) — ${shown} legerősebb kapcsolat. A csomópont mérete a szó gyakoriságát, az él vastagsága a kapcsolat erősségét mutatja.`;
+      if (curView === "net") {
+        fig.appendChild(egoSVG(g, curSeed, curCount));
+        fig.appendChild(cap);
+      } else {
+        const ol = document.createElement("ol"); ol.className = "ego-list";
+        (g.adj[curSeed] || []).slice(0, curCount).forEach(e => {
+          const maxW = Math.max(...(g.adj[curSeed] || []).map(x => x[1]), 1e-12);
+          const li = document.createElement("li");
+          li.innerHTML = `${e[0]} <span class="pill">${Math.round(100 * e[1] / maxW)}%</span>`;
+          ol.appendChild(li);
+        });
+        fig.append(cap, ol);
+      }
+      host.appendChild(fig);
+    }
+    decSel.addEventListener("change", () => { curDecade = +decSel.value; curCount = 8; fillSeeds(); draw(); });
+    seedSel.addEventListener("change", () => { curSeed = seedSel.value; curCount = 8; draw(); });
+    moreBtn.addEventListener("click", () => {
+      const avail = (graphs[String(curDecade)].adj[curSeed] || []).length;
+      curCount = curCount < avail ? avail : 8; draw();
+    });
+    fillSeeds(); draw();
+  }
+  function neighborsFallback() {
+    if (u.nearest_neighbors && u.nearest_neighbors.length) {
+      u.nearest_neighbors.forEach(w => {
+        const div = document.createElement("div");
+        div.innerHTML = `<h3>${w.word}</h3>`;
+        const wrap = document.createElement("div"); wrap.className = "cols";
+        w.by_decade.forEach(bd => {
+          const col = document.createElement("div");
+          col.innerHTML = `<div class="pill">${bd.decade}s</div>` +
+            bd.neighbors.map(n => `<div>${n.word} <span class="note">${n.similarity}</span></div>`).join("");
+          wrap.appendChild(col);
+        });
+        div.appendChild(wrap);
+        document.getElementById("c-neighbors").appendChild(div);
+      });
+    } else empty("c-neighbors", "Nincs adat — előbb futtasd a usage_change vagy a networks elemzést.");
+  }
+
+  // Vocab + lexical diversity
   if (u.vocab_stats && u.vocab_stats.length) {
-    table("c-vocab", ["Évtized", "Szókincs", "Dim.", "Dalok"],
-      u.vocab_stats.map(v => [v.decade + "s", v.vocab_size, v.embedding_dim, v.n_songs]));
+    table("c-vocab", ["Évtized", "Szókincs", "Lexikai változatosság (MATTR)", "Dalok"],
+      u.vocab_stats.map(v => [v.decade + "s", v.vocab_size,
+        v.lexdiv != null ? v.lexdiv.toFixed(3) : "—", v.n_songs]));
   } else empty("c-vocab", "Nincs adat — előbb futtasd a usage_change elemzést.");
-  if (u.alignment_stats && u.alignment_stats.length) {
-    table("c-align", ["Átmenet", "Igazított szavak", "Átlagos hasonlóság"],
-      u.alignment_stats.map(a => [a.from + "s → " + a.to + "s", a.aligned_words, a.avg_similarity]));
-  } else empty("c-align", "Nincs adat — előbb futtasd a usage_change elemzést.");
 })();
 </script>
 </body>
