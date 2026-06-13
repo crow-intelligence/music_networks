@@ -5,6 +5,8 @@
 data/
 vizs/
 etc/
+# Reference PDFs (large, copyrighted) kept locally only.
+papers/
 
 # Python / uv tooling
 .venv/

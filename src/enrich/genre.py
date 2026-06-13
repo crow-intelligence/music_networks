@@ -48,6 +48,8 @@ def load_token(raw: str | None) -> str | None:
         'abcDEF123'
         >>> load_token("  tok  ")
         'tok'
+        >>> load_token('" tok "')
+        'tok'
         >>> load_token("") is None
         True
         >>> load_token(None) is None
@@ -55,7 +57,12 @@ def load_token(raw: str | None) -> str | None:
     """
     if not raw:
         return None
-    cleaned = raw.strip().strip("\"'").strip()
+    # Strip wrapping whitespace and quotes repeatedly until stable, so any mix
+    # (e.g. a quote with padding inside it) is fully removed.
+    cleaned, prev = raw, None
+    while cleaned != prev:
+        prev = cleaned
+        cleaned = cleaned.strip().strip("\"'")
     return cleaned or None
 
 
