@@ -146,8 +146,8 @@
   .legend .sw { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: middle; flex: 0 0 auto; }
   .cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-3); }
   .pill { display: inline-block; font-size: 0.75rem; border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
-  /* §3 distinctive-word clouds */
-  #c-keyness { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+  /* §2 word clouds — frequency + distinctive, side by side for one decade */
+  .cloud-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--sp-3); align-items: start; }
   .cloud-fig { margin: 0; }
   .cloud-img { width: 100%; height: auto; border: 1px solid var(--line); background: var(--card-bg); border-radius: 3px; }
   .rank { margin: var(--sp-1) 0; padding-left: 1.4em; columns: 2; column-gap: var(--sp-3); font-size: 0.9rem; }
@@ -188,7 +188,7 @@
     header { padding-top: var(--sp-5); }
     nav { line-height: 2.4; }
     nav a { display: inline-block; }
-    .cols, .cards, #c-keyness { grid-template-columns: 1fr; }
+    .cols, .cards, .cloud-pair { grid-template-columns: 1fr; }
     .rank, .ego-list { columns: 1; }
     .controls { gap: var(--sp-1) var(--sp-2); }
     /* Keep chart text legible: don't shrink the whole SVG below a readable
@@ -208,8 +208,10 @@
     popzene dalszövegeiben — kizárólag aggregált mutatók (teljes szöveg sosem).</p>
   <nav aria-label="Szakaszok">
     <a href="#overview">Adatok</a>
-    <a href="#keyness">Megkülönböztető szavak</a>
+    <a href="#keyness">Gyakori / jellemző szavak</a>
     <a href="#topics">Témák az időben</a>
+    <a href="#genre">Műfajok</a>
+    <a href="#emotion">Érzelmek</a>
     <a href="#change">Jelentésváltozás</a>
     <a href="#heatmap">Eltérés-hőtérkép</a>
     <a href="#drift">Kumulatív sodródás</a>
@@ -226,9 +228,14 @@
   <div id="c-overview"></div>
 </section>
 
-<section id="keyness"><h2>Megkülönböztető szavak</h2>
-  <p class="note">Évtizedenként legjellemzőbb lemmák (log-ratio &gt; 0, G² szerint rendezve).</p>
-  <div id="c-keyness" class="cols"></div>
+<section id="keyness"><h2>Gyakori és megkülönböztető szavak</h2>
+  <p class="note">Válassz évtizedet a legördülő menüből. Bal oldalon az adott évtized
+    <strong>leggyakoribb</strong> tartalmas szavai (a betűméret a gyakoriságot kódolja),
+    jobb oldalon a <strong>megkülönböztető</strong> szavak — amelyek az évtizedben a
+    többihez képest felülreprezentáltak (betűméret = G² megkülönböztető-erő, log-ratio
+    &gt; 0). Mindkét felhő átváltható rangsorolt listára.</p>
+  <div id="c-keyness-controls" class="controls"></div>
+  <div id="c-keyness" class="cloud-pair"></div>
 </section>
 
 <section id="topics"><h2>Témák az időben</h2>
@@ -241,6 +248,31 @@
   <h3>Témakártyák</h3>
   <div id="c-topic-controls" class="controls"></div>
   <div id="c-topic-cards"></div>
+</section>
+
+<section id="genre"><h2>Műfajok évtizedenként</h2>
+  <p class="note">A dalok műfaji összetétele a <strong>Discogs</strong>-kiadások
+    alapján (a leggyakoribb műfaj az előadó+cím egyezésű kiadásokból). Minden oszlop
+    100%-ra normált; az „Összes” oszlop a teljes (1950+) korpusz aggregátuma. Az
+    <em>n</em> a műfajjal címkézett dalok száma — a lefedettség évtizedenként eltér,
+    ezért a kis mintájú (<span class="flag">★</span>) évtizedeket óvatosan kezeld.</p>
+  <div id="c-genre"></div>
+</section>
+
+<section id="emotion"><h2>Érzelmek a dalszövegekben</h2>
+  <p class="note">A dalszövegek <strong>domináns érzelme</strong> egy magyar
+    XLM-RoBERTa érzelem-osztályozóval (harag, félelem, undor, szomorúság, öröm,
+    illetve „semleges”). Az oszlopok az adott évtized dalainak érzelmi megoszlását
+    mutatják (a domináns érzelem aránya), 100%-ra normálva; az „Összes” a teljes
+    korpusz aggregátuma.</p>
+  <p class="note"><strong>Értelmezési fenntartás:</strong> a modellt
+    közösségi-média szövegekre tanították, itt viszont költői dalszövegekre
+    alkalmazzuk (tartományeltolódás). A „félelem” osztály a gyakorlatban tágan a
+    <em>bánatot, panaszt, szorongást</em> fogja össze (pl. a siratók, „sír-rí”
+    típusú szövegek ide kerülnek), és gyakran átfed a szomorúsággal; a haragot és
+    szomorúságot is összemossa. Az arányok tájékoztató jellegűek, nem
+    abszolút igazság.</p>
+  <div id="c-emotion"></div>
 </section>
 
 <section id="change"><h2>Jelentésváltozás az időben</h2>
@@ -292,10 +324,17 @@
     ablakokra darabolva, átlagolva), a c-TF-IDF a lemmatizált tokeneken.
     A téma-elnevezéseket kézzel adtuk a kulcsszavak alapján.
     A jelentésváltozást a <em>chronowords</em> SVD-beágyazásai mérik, évtizedenként
-    tanítva és Procrustes-igazítással összevetve.</p>
-  <p class="note">A dashboard az 1960-as évektől a 2020-as évekig fedi le az
-    anyagot; a korábbi, ritka évtizedeket elhagytuk. A diakronikus modellek főként
-    az 1990-es évektől megbízhatók. A megjelenített mutatók aggregáltak — a
+    tanítva és Procrustes-igazítással összevetve.
+    A <strong>műfajokat</strong> a <em>Discogs</em> kiadás-adatbázisból nyerjük
+    (előadó+cím egyezésű kiadások leggyakoribb műfaja); a MusicBrainz műfaj-lefedettsége
+    a magyar előadókra gyenge, a Discogsé viszont kiváló.
+    Az <strong>érzelmeket</strong> a
+    <em>visegradmedia-emotion/Emotion_RoBERTa_hungarian6</em> (XLM-RoBERTa) modell
+    osztályozza dalonként, hosszú szövegeknél ablakokra darabolva és átlagolva.</p>
+  <p class="note">A dashboard az 1950-as évektől a 2020-as évekig fedi le az
+    anyagot; a korábbi, ritka évtizedeket elhagytuk. Az 1950-es évek mintája még
+    kicsi (~150 dal), ezt érdemes fenntartással kezelni. A diakronikus modellek
+    főként az 1990-es évektől megbízhatók. A megjelenített mutatók aggregáltak — a
     dashboard sosem közöl teljes dalszöveget.</p>
   <p class="note">Korábbi (2020-as) változat:
     <a href="https://blog.crowintelligence.org/hu/2020/08/19/hatvan-ev-dalszovegei/"
@@ -334,7 +373,13 @@ function empty(id, msg) {
   const d = document.createElement("div"); d.className = "empty"; d.textContent = msg;
   document.getElementById(id).appendChild(d);
 }
-function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; }
+// Smallest "nice" number >= v, on a 1-1.5-2-2.5-3-...-10 ladder so the axis
+// hugs the data (e.g. 2246 -> 2500, not 3000) instead of jumping a full decade.
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
+  return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10].find(s => s >= m - 1e-9) * p;
+}
 
 // ---- shared tooltip (one element, reused by every chart) ----
 const TIP = (() => {
@@ -427,6 +472,58 @@ function groupedBars(id, rows, series) {
     const label = r.decade + "s" + (r.low_n ? " ★" : "");
     g.appendChild(s("text", {x: i * bw + bw / 2, y: ih + 18, "text-anchor": "middle",
       fill: r.low_n ? "var(--accent)" : MUTED, "font-size": 12}, label));
+  });
+  svg.appendChild(g);
+  const scroll = document.createElement("div"); scroll.className = "chart-scroll";
+  scroll.appendChild(svg); host.appendChild(scroll);
+}
+
+// ---- 100% stacked bar chart (emotion / genre proportions by decade) ----
+// rows: [{decade, n, share:{key:frac}, low_n?}]; cats: [{key,label,color}].
+// opts.overall ({share, n}) appends a bold "Összes" aggregate column.
+function stackedBars(id, rows, cats, opts = {}) {
+  const host = document.getElementById(id);
+  if (!rows.length) { empty(id, opts.emptyMsg || "Nincs adat."); return; }
+  const leg = document.createElement("div"); leg.className = "legend";
+  cats.forEach(c => { const sp = document.createElement("span");
+    sp.innerHTML = `<span class="sw" style="background:${c.color}"></span>${c.label}`; leg.appendChild(sp); });
+  host.appendChild(leg);
+
+  const cols = rows.map(r => ({label: r.decade + "s", share: r.share, n: r.n, low_n: r.low_n}));
+  if (opts.overall && opts.overall.n)
+    cols.push({label: "Összes", share: opts.overall.share, n: opts.overall.n, overall: true});
+
+  const W = 1000, H = 380, m = {t: 16, r: 14, b: 56, l: 46};
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
+    "aria-label": opts.ariaLabel || "Halmozott oszlopdiagram évtizedenként."});
+  const g = s("g", {transform: `translate(${m.l},${m.t})`});
+  for (let t = 0; t <= 4; t++) {
+    const y = ih - (ih * t / 4);
+    g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
+    g.appendChild(s("text", {x: -10, y: y + 4, "text-anchor": "end", fill: MUTED, "font-size": 12}, (25 * t) + "%"));
+  }
+  const bw = iw / cols.length, inner = Math.min(bw * 0.62, 76);
+  cols.forEach((col, i) => {
+    const x0 = i * bw + (bw - inner) / 2;
+    let acc = 0;
+    cats.forEach(c => {
+      const frac = (col.share && col.share[c.key]) || 0;
+      if (frac <= 0) return;
+      const yTop = ih - (acc + frac) * ih;
+      const rect = s("rect", {x: x0, y: yTop, width: inner, height: frac * ih, fill: c.color,
+        stroke: PAPER, "stroke-width": 0.5, role: "img",
+        "aria-label": `${col.label}, ${c.label}: ${Math.round(frac * 100)}%`});
+      g.appendChild(rect);
+      bindTip(rect, `<b>${col.label}</b> · ${c.label}<br>${(frac * 100).toFixed(1)}% · n=${col.n.toLocaleString("hu")}`);
+      acc += frac;
+    });
+    const lab = col.label + (col.low_n ? " ★" : "");
+    g.appendChild(s("text", {x: x0 + inner / 2, y: ih + 18, "text-anchor": "middle",
+      fill: col.low_n ? "var(--accent)" : (col.overall ? INK : MUTED), "font-size": 12,
+      "font-weight": col.overall ? "700" : "400"}, lab));
+    g.appendChild(s("text", {x: x0 + inner / 2, y: ih + 34, "text-anchor": "middle",
+      fill: MUTED, "font-size": 10}, "n=" + col.n.toLocaleString("hu")));
   });
   svg.appendChild(g);
   const scroll = document.createElement("div"); scroll.className = "chart-scroll";
@@ -753,52 +850,91 @@ function egoSVG(graph, seed, count) {
     {key: "composers", label: "Zeneszerzők", color: PALETTE[3]},
   ]);
 
-  // Keyness — per-decade era word cloud (image) + ranked list (analytical /
-  // screen-reader fallback), switched by a "felhő / lista" toggle.
-  const kn = DATA.keyness || [];
-  if (!kn.length) empty("c-keyness", "Nincs adat — előbb építsd a korpuszt.");
-  kn.forEach(d => {
-    const fig = document.createElement("figure"); fig.className = "cloud-fig";
-    const head = document.createElement("h3"); head.textContent = d.decade + "s"; fig.appendChild(head);
-
-    const cloudWrap = document.createElement("div");
-    if (d.cloud) {
-      const img = document.createElement("img");
-      img.className = "cloud-img"; img.src = "assets/clouds/" + d.cloud.file;
-      img.loading = "lazy"; img.alt = ""; img.setAttribute("aria-hidden", "true");
-      img.width = d.cloud.width; img.height = d.cloud.height;
-      const cap = document.createElement("figcaption"); cap.className = "note";
-      cap.textContent = `${d.decade}-es évek · ${d.cloud.n} megkülönböztető szó · ${d.cloud.font} · a betűméret a megkülönböztető-erőt (G²) kódolja`;
-      cloudWrap.append(img, cap);
+  // Word clouds — for the decade picked in the dropdown, show two era-styled
+  // clouds side by side: most-frequent words (left) and distinctive words
+  // (right). Each cloud (image) flips to a ranked list (analytical / screen-
+  // reader fallback) via a "felhő / lista" toggle.
+  renderWordClouds();
+  function renderWordClouds() {
+    const freqRows = DATA.frequency || [];
+    const knRows = DATA.keyness || [];
+    const host = document.getElementById("c-keyness");
+    const ctrls = document.getElementById("c-keyness-controls");
+    if (!freqRows.length && !knRows.length) {
+      empty("c-keyness", "Nincs adat — előbb építsd a korpuszt."); return;
     }
-    // Ranked list (the canonical, accessible content).
-    const listWrap = document.createElement("div");
-    const ol = document.createElement("ol"); ol.className = "rank";
-    d.terms.forEach(t => {
-      const li = document.createElement("li");
-      li.innerHTML = `${t.term.replace(/_/g, " ")} <span class="pill" title="log-likelihood">G² ${t.log_likelihood}</span>`;
-      ol.appendChild(li);
-    });
-    listWrap.appendChild(ol);
+    const byFreq = {}; freqRows.forEach(d => byFreq[d.decade] = d);
+    const byKn = {}; knRows.forEach(d => byKn[d.decade] = d);
+    const decades = [...new Set([...freqRows, ...knRows].map(d => d.decade))].sort((a, b) => a - b);
+    let cur = decades.includes(1990) ? 1990 : decades[decades.length - 1];
 
-    if (d.cloud) {
-      const setView = v => {
-        const cloud = v === "cloud";
-        cloudWrap.style.display = cloud ? "" : "none";
-        // In cloud mode keep the list in the a11y tree (visually hidden) so
-        // screen readers still get the full ranking; otherwise show it.
-        listWrap.classList.toggle("visually-hidden", cloud);
-      };
-      fig.appendChild(makeToggle(
-        [{label: "Felhő", value: "cloud"}, {label: "Lista", value: "list"}],
-        setView, `${d.decade}s nézetváltó`));
-      fig.append(cloudWrap, listWrap);
-      setView("cloud");
-    } else {
-      fig.appendChild(listWrap);
+    const decSel = document.createElement("select");
+    decSel.setAttribute("aria-label", "Évtized");
+    decades.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d + "s"; decSel.appendChild(o); });
+    decSel.value = cur;
+    const lbl = document.createElement("label"); lbl.textContent = "Évtized: "; lbl.appendChild(decSel);
+    ctrls.appendChild(lbl);
+    decSel.addEventListener("change", () => { cur = +decSel.value; draw(); });
+
+    // One cloud+list figure for a per-decade block (frequency or keyness).
+    function cloudFigure(row, opts) {
+      const fig = document.createElement("figure"); fig.className = "cloud-fig";
+      const head = document.createElement("h3"); head.textContent = opts.title; fig.appendChild(head);
+      if (!row || !row.terms || !row.terms.length) {
+        const e = document.createElement("p"); e.className = "empty";
+        e.textContent = "Nincs adat ehhez az évtizedhez."; fig.appendChild(e); return fig;
+      }
+      const cloudWrap = document.createElement("div");
+      if (row.cloud) {
+        const img = document.createElement("img");
+        img.className = "cloud-img"; img.src = "assets/clouds/" + row.cloud.file;
+        img.loading = "lazy"; img.alt = ""; img.setAttribute("aria-hidden", "true");
+        img.width = row.cloud.width; img.height = row.cloud.height;
+        const cap = document.createElement("figcaption"); cap.className = "note";
+        cap.textContent = opts.caption(row);
+        cloudWrap.append(img, cap);
+      }
+      const listWrap = document.createElement("div");
+      const ol = document.createElement("ol"); ol.className = "rank";
+      row.terms.forEach(t => {
+        const li = document.createElement("li");
+        li.innerHTML = `${t.term.replace(/_/g, " ")} <span class="pill" title="${opts.pillTitle}">${opts.pill(t)}</span>`;
+        ol.appendChild(li);
+      });
+      listWrap.appendChild(ol);
+      if (row.cloud) {
+        const setView = v => {
+          const cloud = v === "cloud";
+          cloudWrap.style.display = cloud ? "" : "none";
+          // Keep the list in the a11y tree (visually hidden) in cloud mode.
+          listWrap.classList.toggle("visually-hidden", cloud);
+        };
+        fig.appendChild(makeToggle(
+          [{label: "Felhő", value: "cloud"}, {label: "Lista", value: "list"}],
+          setView, `${opts.title} nézetváltó`));
+        fig.append(cloudWrap, listWrap);
+        setView("cloud");
+      } else { fig.appendChild(listWrap); }
+      return fig;
     }
-    document.getElementById("c-keyness").appendChild(fig);
-  });
+
+    function draw() {
+      host.innerHTML = "";
+      host.appendChild(cloudFigure(byFreq[cur], {
+        title: "Leggyakoribb szavak",
+        pillTitle: "előfordulás a korpuszban",
+        pill: t => "× " + t.freq,
+        caption: row => `${cur}-es évek · ${row.cloud.n} leggyakoribb tartalmas szó · ${row.cloud.font} · a betűméret a gyakoriságot kódolja`,
+      }));
+      host.appendChild(cloudFigure(byKn[cur], {
+        title: "Megkülönböztető szavak",
+        pillTitle: "log-likelihood",
+        pill: t => "G² " + t.log_likelihood,
+        caption: row => `${cur}-es évek · ${row.cloud.n} megkülönböztető szó · ${row.cloud.font} · a betűméret a megkülönböztető-erőt (G²) kódolja`,
+      }));
+    }
+    draw();
+  }
 
   // Topics over time — count vs. within-decade proportion, re-rendered on toggle.
   const info = (DATA.topics && DATA.topics.info) || [];
@@ -829,7 +965,7 @@ function egoSVG(graph, seed, count) {
     chart.parentNode.insertBefore(leg, chart);
     if (metric === "prop") {
       multiLine("c-topics", "c-topics-legend", tDecades.map(d => d + "s"), propLines,
-        {yUnit: "arány (évtizeden belül)", fmt: v => Math.round(v * 100) + "%", emphasize: 6, yMax: 1});
+        {yUnit: "arány (évtizeden belül)", fmt: v => Math.round(v * 100) + "%", emphasize: 6});
     } else {
       multiLine("c-topics", "c-topics-legend", tDecades.map(d => d + "s"), countLines,
         {yUnit: "dalok száma", fmt: v => String(Math.round(v)), emphasize: 6});
@@ -988,6 +1124,28 @@ function egoSVG(graph, seed, count) {
       u.vocab_stats.map(v => [v.decade + "s", v.vocab_size,
         v.lexdiv != null ? v.lexdiv.toFixed(3) : "—", v.n_songs]));
   } else empty("c-vocab", "Nincs adat — előbb futtasd a usage_change elemzést.");
+
+  // Genre — műfaji megoszlás évtizedenként (Discogs, 100% halmozott).
+  (function () {
+    const gd = DATA.genre || {};
+    const decs = gd.by_decade || [];
+    if (!decs.length) { empty("c-genre", "Nincs adat — előbb futtasd a Discogs műfaj-címkézést (python -m src.enrich.genre)."); return; }
+    const cats = (gd.genres || []).map((g, i) => ({key: g, label: g, color: PALETTE[i % PALETTE.length]}));
+    const rows = decs.map(d => ({decade: d.decade, n: d.n, share: d.share, low_n: d.n < 50}));
+    stackedBars("c-genre", rows, cats, {overall: gd.overall, ariaLabel: "Műfaji megoszlás évtizedenként."});
+  })();
+
+  // Emotion — érzelmi megoszlás évtizedenként (XLM-RoBERTa, 100% halmozott).
+  (function () {
+    const ed = DATA.emotion || {};
+    const decs = ed.by_decade || [];
+    if (!decs.length) { empty("c-emotion", "Nincs adat — előbb futtasd az érzelem-osztályozót (python -m src.lyrics.emotion run)."); return; }
+    const labelMap = {anger: "harag", fear: "félelem", disgust: "undor", sadness: "szomorúság", joy: "öröm", none: "semleges"};
+    const colorMap = {anger: "#aa3333", fear: "#7d3c98", disgust: "#5a7d2a", sadness: "#34568b", joy: "#caa53d", none: "#9a958a"};
+    const cats = (ed.labels || []).map(l => ({key: l, label: labelMap[l] || l, color: colorMap[l] || MUTED}));
+    const rows = decs.map(d => ({decade: d.decade, n: d.n, share: d.share, low_n: d.n < 50}));
+    stackedBars("c-emotion", rows, cats, {overall: ed.overall, ariaLabel: "Érzelmi megoszlás évtizedenként."});
+  })();
 })();
 </script>
 </body>

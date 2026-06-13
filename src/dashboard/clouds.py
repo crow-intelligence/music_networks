@@ -25,6 +25,7 @@ from typing import Any
 # caption. Trimmed to the decades the corpus actually covers; any decade without
 # an entry falls back to ``_FALLBACK_FONT`` (the page-serif-like Playfair).
 DECADE_FONTS: dict[int, tuple[str, str]] = {
+    1950: ("Bevan-Regular.ttf", "Bevan — tánczene / korai rock"),
     1960: ("RozhaOne-Regular.ttf", "Rozha One — beat / pszichedelikus"),
     1970: ("Pacifico-Regular.ttf", "Pacifico — diszkó / funk"),
     1980: ("Audiowide-Regular.ttf", "Audiowide — new wave / szintipop"),
@@ -40,6 +41,7 @@ _FALLBACK_FONT = "PlayfairDisplay.ttf"
 # alone (size + the ranked list carry the data).
 # All hues are AA-contrast (>= 4.5:1) on the cream background.
 DECADE_INK: dict[int, list[str]] = {
+    1950: ["#2c2a24", "#7a1f1f", "#5a5346"],
     1960: ["#7a1f1f", "#aa3333", "#856404"],
     1970: ["#a8431a", "#856404", "#7a1f1f"],
     1980: ["#34568b", "#7d3c98", "#2a6f7a"],
@@ -53,18 +55,24 @@ _PAPER = "#f7f5ef"
 
 
 def cloud_weights(
-    terms: list[dict[str, Any]], word_count: int = 40
+    terms: list[dict[str, Any]],
+    word_count: int = 40,
+    *,
+    weight_key: str = "log_likelihood",
 ) -> dict[str, float]:
-    """Map the top distinctive terms to word-cloud weights via a ``sqrt`` scale.
+    """Map the top terms to word-cloud weights via a ``sqrt`` scale.
 
-    Font area in the cloud scales with the weight, so taking ``sqrt`` of the G²
-    log-likelihood keeps the strongest word from dwarfing the rest. ``_`` joins
-    in n-gram lemmas are turned back into spaces for display.
+    Font area in the cloud scales with the weight, so taking ``sqrt`` of the
+    underlying score (the G² log-likelihood for *distinctive* clouds, or the raw
+    frequency for *most-frequent* clouds) keeps the strongest word from dwarfing
+    the rest. ``_`` joins in n-gram lemmas are turned back into spaces for display.
 
     Args:
-        terms: Per-decade term dicts (``term`` + ``log_likelihood``), strongest
-            first, as produced by :func:`src.dashboard.build.keyness_block`.
+        terms: Per-decade term dicts (``term`` + the ``weight_key`` field),
+            strongest first, as produced by the dashboard build blocks.
         word_count: How many top terms to include.
+        weight_key: The term field to weight by (``"log_likelihood"`` for
+            keyness, ``"freq"`` for raw frequency).
 
     Returns:
         Mapping of display term → positive weight, suitable for
@@ -79,10 +87,12 @@ def cloud_weights(
         ['nagy szerelem', 'szív']
         >>> w["szív"] == 10.0 and w["nagy szerelem"] == 5.0
         True
+        >>> cloud_weights([{"term": "szív", "freq": 9}], weight_key="freq")
+        {'szív': 3.0}
     """
     out: dict[str, float] = {}
     for t in terms[:word_count]:
-        score = max(0.0, float(t.get("log_likelihood", 0.0)))
+        score = max(0.0, float(t.get(weight_key, 0.0)))
         weight = math.sqrt(score)
         if weight > 0:
             out[str(t["term"]).replace("_", " ")] = weight
@@ -100,11 +110,13 @@ def _ink_func(decade: int):
 
 
 def render_clouds(
-    keyness: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
     out_dir: Path | str,
     *,
     font_dir: Path | str,
     word_count: int = 40,
+    weight_key: str = "log_likelihood",
+    prefix: str = "decade_",
     width: int = 900,
     height: int = 460,
     scale: int = 2,
@@ -112,10 +124,15 @@ def render_clouds(
     """Render one era-styled word-cloud PNG per decade and return a manifest.
 
     Args:
-        keyness: The keyness block (one row per decade with ``terms``).
+        rows: A per-decade block (one row per decade with ``terms``) — either the
+            keyness block or the frequency block.
         out_dir: Directory the PNGs are written to (created if absent).
         font_dir: Build-only directory holding the era ``.ttf`` files.
         word_count: Max words per cloud (default 40).
+        weight_key: Term field driving font size (``"log_likelihood"`` for the
+            distinctive cloud, ``"freq"`` for the most-frequent cloud).
+        prefix: Output filename prefix; the file is ``<prefix><decade>.png`` so
+            the two cloud sets (e.g. ``decade_`` and ``freq_decade_``) coexist.
         width: Cloud width in px before ``scale``.
         height: Cloud height in px before ``scale``.
         scale: Super-sampling factor for crisp text on HiDPI screens.
@@ -131,9 +148,9 @@ def render_clouds(
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest: dict[int, dict[str, Any]] = {}
 
-    for row in keyness:
+    for row in rows:
         decade = int(row["decade"])
-        weights = cloud_weights(row.get("terms", []), word_count)
+        weights = cloud_weights(row.get("terms", []), word_count, weight_key=weight_key)
         if not weights:
             continue
         font_name, font_label = DECADE_FONTS.get(
@@ -159,7 +176,7 @@ def render_clouds(
             random_state=42,  # deterministic layout across builds
         )
         wc.generate_from_frequencies(weights)
-        fname = f"decade_{decade}.png"
+        fname = f"{prefix}{decade}.png"
         wc.to_file(str(out_dir / fname))
         manifest[decade] = {
             "file": fname,

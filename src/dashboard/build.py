@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,8 @@ DEFAULT_OUT = Path("data/dashboard/index.html")
 DEFAULT_TOPICS_DIR = Path("data/processed/topics")
 DEFAULT_USAGE_DIR = Path("data/processed/usage")
 DEFAULT_NETWORKS_DIR = Path("data/processed/networks")
+DEFAULT_EMOTION_DIR = Path("data/processed/emotion")
+DEFAULT_GENRE_DIR = Path("data/processed/genre")
 _TEMPLATE = Path(__file__).with_name("template.html")
 _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
@@ -43,9 +46,11 @@ LOW_N_SONGS = 50
 # How many distinctive terms to surface per decade (word cloud + ranked list).
 WORD_COUNT = 40
 
-# The pre-1960 decades are too sparse to be meaningful; the dashboard shows
-# only decades from this year on (underlying artifacts are left intact).
-MIN_DECADE = 1960
+# The pre-1950 decades are too sparse to be meaningful (single/double-digit song
+# counts); the dashboard shows only decades from this year on. The 1950s clears
+# the low-N bar (~150 corpus songs) and is included; underlying artifacts for the
+# dropped earlier decades are left intact.
+MIN_DECADE = 1950
 
 
 def decade_overview(stats: list[DecadeStat]) -> list[dict[str, Any]]:
@@ -122,6 +127,43 @@ def keyness_block(
     return out
 
 
+def frequency_block(counts: dict[int, Counter], top: int = 15) -> list[dict[str, Any]]:
+    """Reduce per-decade token counts to the most frequent content words.
+
+    The complement of :func:`keyness_block`: instead of what is *distinctive* of
+    a decade, this is simply what is *most said* in it (the corpus tokens are
+    already content-word-filtered and n-gram-folded, so function words are gone).
+
+    Args:
+        counts: Per-decade token counts, from
+            :func:`src.lyrics.decade_keywords.decade_counts`.
+        top: How many terms to keep per decade.
+
+    Returns:
+        One row per decade with its most frequent terms (``term`` + ``freq``),
+        most frequent first.
+
+    Examples:
+        >>> from collections import Counter
+        >>> counts = {1990: Counter({"szív": 9, "szeret": 5, "kép": 1})}
+        >>> block = frequency_block(counts, top=2)
+        >>> [(t["term"], t["freq"]) for t in block[0]["terms"]]
+        [('szív', 9), ('szeret', 5)]
+    """
+    out: list[dict[str, Any]] = []
+    for decade in sorted(counts):
+        out.append(
+            {
+                "decade": decade,
+                "terms": [
+                    {"term": term, "freq": freq}
+                    for term, freq in counts[decade].most_common(top)
+                ],
+            }
+        )
+    return out
+
+
 def _load_json(path: Path, default: Any) -> Any:
     """Return parsed JSON at ``path``, or ``default`` if the file is absent."""
     if not path.exists():
@@ -133,10 +175,13 @@ def assemble_data(
     *,
     overview: list[dict[str, Any]],
     keyness: list[dict[str, Any]],
+    frequency: list[dict[str, Any]],
     topic_info: list[dict[str, Any]],
     topics_over_time: list[dict[str, Any]],
     usage: dict[str, Any],
     networks: dict[str, Any] | None = None,
+    emotion: dict[str, Any] | None = None,
+    genre: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -145,10 +190,13 @@ def assemble_data(
     Args:
         overview: From :func:`decade_overview`.
         keyness: From :func:`keyness_block`.
+        frequency: From :func:`frequency_block`.
         topic_info: Topic table (``topic_info.json``).
         topics_over_time: Per-(topic, decade) frequencies.
         usage: The diachronic-analysis blocks (may be empty).
         networks: The per-decade word-graph blocks (may be empty/``None``).
+        emotion: The aggregated emotion blocks (may be empty/``None``).
+        genre: The aggregated genre blocks (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -158,8 +206,8 @@ def assemble_data(
         ...         {"topic_id": 0, "name": "Szerelem", "keywords": ["a"], "size": 9}]
         >>> ot = [{"topic_id": -1, "decade": 1990, "frequency": 1},
         ...       {"topic_id": 0, "decade": 1990, "frequency": 5}]
-        >>> data = assemble_data(overview=[], keyness=[], topic_info=info,
-        ...                      topics_over_time=ot, usage={})
+        >>> data = assemble_data(overview=[], keyness=[], frequency=[],
+        ...                      topic_info=info, topics_over_time=ot, usage={})
         >>> [t["topic_id"] for t in data["topics"]["info"]]
         [0]
         >>> data["topics"]["over_time"][0]["topic_id"]
@@ -170,34 +218,38 @@ def assemble_data(
     return {
         "overview": overview,
         "keyness": keyness,
+        "frequency": frequency,
         "topics": {"info": info, "over_time": over_time},
         "usage": usage,
         "networks": networks or {},
+        "emotion": emotion or {},
+        "genre": genre or {},
     }
 
 
 def emit_assets(
     out_dir: Path,
     keyness: list[dict[str, Any]],
+    frequency: list[dict[str, Any]],
     *,
     font_dir: Path = DEFAULT_FONT_DIR,
     word_count: int = WORD_COUNT,
-) -> dict[int, dict[str, Any]]:
+) -> None:
     """Render the decade word-cloud images and copy shipped assets.
 
-    Renders one cloud PNG per decade under ``<out_dir>/assets/clouds``, copies
-    any self-hosted runtime fonts from ``src/dashboard/assets/fonts`` next to the
-    HTML, and annotates each keyness row **in place** with its ``cloud`` entry
-    (so the shared dicts the template serialises gain the image reference).
+    Renders, per decade, **two** era-styled cloud PNGs under
+    ``<out_dir>/assets/clouds`` — a *most-frequent* cloud (``freq_decade_*.png``)
+    and a *distinctive* cloud (``decade_*.png``) — copies the self-hosted runtime
+    fonts next to the HTML, and annotates each keyness/frequency row **in place**
+    with its ``cloud`` entry (so the shared dicts the template serialises gain
+    the image reference).
 
     Args:
         out_dir: The dashboard output directory (where ``index.html`` lives).
         keyness: The keyness block; rows are mutated to add ``cloud``.
+        frequency: The frequency block; rows are mutated to add ``cloud``.
         font_dir: Build-only directory of era ``.ttf`` files.
         word_count: Max words per cloud.
-
-    Returns:
-        The cloud manifest ``{decade: {...}}`` (also attached to ``keyness``).
     """
     from src.dashboard.clouds import render_clouds
 
@@ -214,14 +266,23 @@ def emit_assets(
     clouds_dir = assets / "clouds"
     if clouds_dir.exists():
         shutil.rmtree(clouds_dir)
-    manifest = render_clouds(
-        keyness, clouds_dir, font_dir=font_dir, word_count=word_count
-    )
-    for row in keyness:
-        cloud = manifest.get(int(row["decade"]))
-        if cloud is not None:
-            row["cloud"] = cloud
-    return manifest
+
+    for rows, weight_key, prefix in (
+        (keyness, "log_likelihood", "decade_"),
+        (frequency, "freq", "freq_decade_"),
+    ):
+        manifest = render_clouds(
+            rows,
+            clouds_dir,
+            font_dir=font_dir,
+            word_count=word_count,
+            weight_key=weight_key,
+            prefix=prefix,
+        )
+        for row in rows:
+            cloud = manifest.get(int(row["decade"]))
+            if cloud is not None:
+                row["cloud"] = cloud
 
 
 def render_html(data: dict[str, Any], template: str) -> str:
@@ -287,6 +348,82 @@ def load_networks(networks_dir: Path) -> dict[str, Any]:
     return {"decades": meta.get("decades", []), "graphs": graphs}
 
 
+def _recombine(
+    decades: list[dict[str, Any]], keys: list[str], weight: str, denom: str
+) -> dict[str, Any]:
+    """N-weighted recombination of per-decade summaries into one overall summary.
+
+    Each ``mean``/``share`` map is a weighted average over the decade ``weight``
+    counts, so it is divided by the **weight** total — keeping the property that a
+    ``share`` map sums to 1.0 overall, exactly as it does per decade. When
+    ``denom`` differs from ``weight`` (genre: tagged ``n`` vs all ``total``) a
+    separate ``coverage`` = weight/denom ratio is added. The overall reflects
+    exactly the decades kept after :data:`MIN_DECADE` filtering.
+
+    Args:
+        decades: Per-decade summary dicts.
+        keys: Which map fields to recombine (e.g. ``["mean", "share"]``).
+        weight: The per-decade count field to weight a map by (and divide by).
+        denom: The per-decade count field for the ``coverage`` denominator.
+
+    Returns:
+        A summary dict with the summed integer counts and recombined maps.
+    """
+    total = {f: sum(int(d.get(f, 0)) for d in decades) for f in {weight, denom}}
+    out: dict[str, Any] = dict(total)
+    div = total[weight] or 1
+    for key in keys:
+        labels = decades[0].get(key, {}) if decades else {}
+        out[key] = {
+            lab: sum(
+                d.get(key, {}).get(lab, 0.0) * int(d.get(weight, 0)) for d in decades
+            )
+            / div
+            for lab in labels
+        }
+    if denom != weight:  # genre carries a coverage ratio
+        out["coverage"] = (total[weight] / total[denom]) if total[denom] else 0.0
+    return out
+
+
+def load_emotion(emotion_dir: Path) -> dict[str, Any]:
+    """Load aggregated emotion blocks, scoped to :data:`MIN_DECADE`+.
+
+    Args:
+        emotion_dir: Directory with ``emotion.json`` (see
+            :func:`src.lyrics.emotion.build_artifacts`).
+
+    Returns:
+        ``{}`` if absent, else ``{"labels", "overall", "by_decade"}`` with
+        decades below :data:`MIN_DECADE` dropped and ``overall`` recomputed.
+    """
+    agg = _load_json(emotion_dir / "emotion.json", {})
+    if not agg:
+        return {}
+    kept = [d for d in agg.get("by_decade", []) if d["decade"] >= MIN_DECADE]
+    overall = _recombine(kept, ["mean", "share"], "n", "n") if kept else {}
+    return {"labels": agg.get("labels", []), "overall": overall, "by_decade": kept}
+
+
+def load_genre(genre_dir: Path) -> dict[str, Any]:
+    """Load aggregated genre blocks, scoped to :data:`MIN_DECADE`+.
+
+    Args:
+        genre_dir: Directory with ``genre.json`` (see
+            :func:`src.enrich.genre.build_artifacts`).
+
+    Returns:
+        ``{}`` if absent, else ``{"genres", "overall", "by_decade"}`` with
+        decades below :data:`MIN_DECADE` dropped and ``overall`` recomputed.
+    """
+    agg = _load_json(genre_dir / "genre.json", {})
+    if not agg:
+        return {}
+    kept = [d for d in agg.get("by_decade", []) if d["decade"] >= MIN_DECADE]
+    overall = _recombine(kept, ["share"], "n", "total") if kept else {}
+    return {"genres": agg.get("genres", []), "overall": overall, "by_decade": kept}
+
+
 def build(
     *,
     db_path: str = "data/music.db",
@@ -294,6 +431,8 @@ def build(
     topics_dir: Path | str = DEFAULT_TOPICS_DIR,
     usage_dir: Path | str = DEFAULT_USAGE_DIR,
     networks_dir: Path | str = DEFAULT_NETWORKS_DIR,
+    emotion_dir: Path | str = DEFAULT_EMOTION_DIR,
+    genre_dir: Path | str = DEFAULT_GENRE_DIR,
     out_path: Path | str = DEFAULT_OUT,
 ) -> Path:
     """Build the dashboard HTML from all cached artifacts.
@@ -304,13 +443,15 @@ def build(
         topics_dir: Topic artifacts dir.
         usage_dir: Diachronic-usage artifacts dir.
         networks_dir: Per-decade word-graph artifacts dir.
+        emotion_dir: Emotion artifacts dir (``emotion.json``).
+        genre_dir: Genre artifacts dir (``genre.json``).
         out_path: Output HTML path.
 
     Returns:
         The written HTML path.
     """
     from src.lyrics.corpus import load_corpus
-    from src.lyrics.decade_keywords import keywords_by_decade
+    from src.lyrics.decade_keywords import decade_counts, keywords_by_decade
     from src.lyrics.stats import collect_decade_stats
 
     topics_dir, usage_dir, networks_dir, out_path = (
@@ -330,6 +471,8 @@ def build(
         keyness_block(keywords_by_decade(docs), top=WORD_COUNT) if docs else []
     )
     keyness = [r for r in all_keyness if r["decade"] >= MIN_DECADE]
+    all_frequency = frequency_block(decade_counts(docs), top=WORD_COUNT) if docs else []
+    frequency = [r for r in all_frequency if r["decade"] >= MIN_DECADE]
     topics_over_time = [
         r
         for r in _load_json(topics_dir / "topics_over_time.json", [])
@@ -353,19 +496,25 @@ def build(
             k: v for k, v in networks["graphs"].items() if int(k) >= MIN_DECADE
         }
 
+    emotion = load_emotion(Path(emotion_dir))
+    genre = load_genre(Path(genre_dir))
+
     data = assemble_data(
         overview=overview,
         keyness=keyness,
+        frequency=frequency,
         topic_info=_load_json(topics_dir / "topic_info.json", []),
         topics_over_time=topics_over_time,
         usage=usage,
         networks=networks,
+        emotion=emotion,
+        genre=genre,
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    # Render cloud images + copy assets; this annotates keyness rows in place
-    # (shared dict refs in `data`) before the blob is serialised.
-    emit_assets(out_path.parent, keyness)
+    # Render cloud images + copy assets; this annotates keyness/frequency rows in
+    # place (shared dict refs in `data`) before the blob is serialised.
+    emit_assets(out_path.parent, keyness, frequency)
 
     html = render_html(data, _TEMPLATE.read_text(encoding="utf-8"))
     out_path.write_text(html, encoding="utf-8")
@@ -382,6 +531,8 @@ def main() -> None:
     parser.add_argument("--topics-dir", default=str(DEFAULT_TOPICS_DIR))
     parser.add_argument("--usage-dir", default=str(DEFAULT_USAGE_DIR))
     parser.add_argument("--networks-dir", default=str(DEFAULT_NETWORKS_DIR))
+    parser.add_argument("--emotion-dir", default=str(DEFAULT_EMOTION_DIR))
+    parser.add_argument("--genre-dir", default=str(DEFAULT_GENRE_DIR))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
 
@@ -391,6 +542,8 @@ def main() -> None:
         topics_dir=args.topics_dir,
         usage_dir=args.usage_dir,
         networks_dir=args.networks_dir,
+        emotion_dir=args.emotion_dir,
+        genre_dir=args.genre_dir,
         out_path=args.out,
     )
     folder = path.parent.resolve()
