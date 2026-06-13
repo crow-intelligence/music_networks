@@ -106,8 +106,12 @@ def mean_pool(
     if weights is None or sum(weights) <= 0:
         weights = [1.0] * len(vectors)
     total = sum(weights)
+    # Normalize the weights first (so they sum to 1) before applying them: this
+    # keeps the result a true convex combination — always within [min, max] —
+    # even when a weight is so small that ``value * weight`` would underflow.
+    norm = [w / total for w in weights]
     return [
-        sum(v[j] * w for v, w in zip(vectors, weights, strict=True)) / total
+        sum(v[j] * w for v, w in zip(vectors, norm, strict=True))
         for j in range(width)
     ]
 

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +33,7 @@ from src.db import (
     CrawlState,
     Performer,
     Person,
+    SongPerformer,
     create_all,
     get_async_engine,
     make_async_session,
@@ -43,6 +44,7 @@ from src.enrich.wikidata import ArtistInfo, WikidataClient
 _WD = "wikidata"
 _MB = "musicbrainz"
 _KIND = "wd_artist"
+_SEARCH_KIND = "wd_search"
 MAX_ATTEMPTS = 3
 
 
@@ -104,6 +106,101 @@ class WikidataEnricher:
                     counts["queued"] += await self._queue_bio(session, info.qid)
             await session.commit()
         return counts
+
+    async def resolve_unlinked(
+        self, *, limit: int | None = None, min_songs: int = 1
+    ) -> dict[str, int]:
+        """Per-name fallback: resolve still-unlinked performers via label search.
+
+        The bulk :meth:`import_facts` only links performers whose name matches a
+        Hungarian artist already in Wikidata's set. This catches the rest by
+        searching each unlinked performer's name (most-recorded first), keeping
+        only a confident music-entity match (:meth:`WikidataClient.resolve_name`),
+        then upserting + linking it. Resumable via ``crawl_state``
+        (``kind='wd_search'``): an already-attempted performer is skipped.
+
+        Args:
+            limit: Optional cap on performers attempted this run.
+            min_songs: Only consider performers credited on at least this many
+                songs (skip the once-off long tail).
+
+        Returns:
+            Counts ``{"attempted", "resolved"}``.
+        """
+        await self.init_db()
+        async with self._session_factory() as session:
+            candidates = (
+                await session.execute(
+                    select(Performer.id, Performer.name)
+                    .join(SongPerformer, SongPerformer.performer_id == Performer.id)
+                    .where(Performer.artist_id.is_(None))
+                    .group_by(Performer.id)
+                    .having(func.count(SongPerformer.song_id) >= min_songs)
+                    .order_by(func.count(SongPerformer.song_id).desc())
+                )
+            ).all()
+
+        counts = {"attempted": 0, "resolved": 0}
+        for performer_id, name in candidates:
+            if limit is not None and counts["attempted"] >= limit:
+                break
+            if await self._search_done(performer_id):
+                continue
+            counts["attempted"] += 1
+            try:
+                info = await self._client.resolve_name(name)
+            except Exception as exc:  # noqa: BLE001 - record and retry later
+                await self._mark_search(performer_id, "failed", str(exc)[:500])
+                continue
+            if info is None:
+                await self._mark_search(performer_id, "done", None)
+                continue
+            async with self._session_factory() as session:
+                artist_id = await self._upsert_artist(session, info)
+                await self._link(session, Performer, performer_id, artist_id)
+                if info.huwiki_title:
+                    await self._queue_bio(session, info.qid)
+                await session.commit()
+            await self._mark_search(performer_id, "done", None)
+            counts["resolved"] += 1
+        return counts
+
+    async def _search_done(self, performer_id: int) -> bool:
+        """Whether a performer's per-name search is done / exhausted retries."""
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(CrawlState.status, CrawlState.attempts).where(
+                        CrawlState.url == f"performer:{performer_id}",
+                        CrawlState.kind == _SEARCH_KIND,
+                    )
+                )
+            ).first()
+        if row is None:
+            return False
+        status, attempts = row
+        return status == "done" or attempts >= MAX_ATTEMPTS
+
+    async def _mark_search(
+        self, performer_id: int, status: str, error: str | None
+    ) -> None:
+        """Upsert a ``wd_search`` crawl-state row for a performer."""
+        async with self._session_factory() as session:
+            set_: dict = {"status": status, "last_error": error}
+            if status == "failed":
+                set_["attempts"] = CrawlState.attempts + 1
+            await session.execute(
+                sqlite_insert(CrawlState)
+                .values(
+                    url=f"performer:{performer_id}",
+                    kind=_SEARCH_KIND,
+                    status=status,
+                    attempts=1 if status == "failed" else 0,
+                    last_error=error,
+                )
+                .on_conflict_do_update(index_elements=["url"], set_=set_)
+            )
+            await session.commit()
 
     async def fetch_bios(self, *, limit: int | None = None) -> int:
         """Drain queued ``wd_artist`` rows, filling ``Artist.description``.

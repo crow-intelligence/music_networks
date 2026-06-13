@@ -85,6 +85,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-extracts", action="store_true", help="skip fetching Wikipedia bios"
     )
 
+    wr = sub.add_parser(
+        "wd-resolve",
+        help="per-name Wikidata fallback for performers the bulk pass missed",
+    )
+    wr.add_argument("--limit", type=int, default=None, help="cap performers attempted")
+    wr.add_argument(
+        "--min-songs", type=int, default=1, help="skip performers below this song count"
+    )
+
     sub.add_parser("link-remakes", help="recompute is_remake / original_song_id")
     sub.add_parser("qa", help="print dating coverage report")
     return parser
@@ -197,6 +206,19 @@ async def _run(args: argparse.Namespace) -> None:
             if not args.no_extracts:
                 bios = await enricher.fetch_bios(limit=args.bio_limit)
                 print(f"Fetched {bios} Hungarian Wikipedia bios.")
+        finally:
+            await enricher.close()
+        return
+    if args.command == "wd-resolve":
+        enricher = WikidataEnricher(WikidataClient(delay=args.delay), db_path=args.db)
+        try:
+            counts = await enricher.resolve_unlinked(
+                limit=args.limit, min_songs=args.min_songs
+            )
+            print(
+                f"Attempted {counts['attempted']} unlinked performers; "
+                f"resolved {counts['resolved']} to Wikidata artists."
+            )
         finally:
             await enricher.close()
         return

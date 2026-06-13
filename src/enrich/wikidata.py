@@ -35,6 +35,7 @@ from src.scraper.fetch import RateLimiter
 
 # Wikidata Query Service SPARQL endpoint and the Hungarian Wikipedia API.
 WDQS_ENDPOINT = "https://query.wikidata.org/sparql"
+WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 HUWIKI_API = "https://hu.wikipedia.org/w/api.php"
 HUWIKI_PREFIX = "https://hu.wikipedia.org/"
 
@@ -327,6 +328,63 @@ WHERE {{
 """.strip()
 
 
+def music_entities_query(qids: list[str]) -> str:
+    """Build a SPARQL query fetching only the music entities among ``qids``.
+
+    The per-name fallback first finds candidate entities by label search, then
+    passes their ids here: this keeps just those that are a human with a music
+    occupation or a musical group (so a same-named politician/place is dropped),
+    and attaches the same facts as :func:`hungarian_artists_query` — but without
+    the Hungary constraint, so an act Wikidata doesn't tag ``P27=Q28`` still
+    resolves.
+
+    Args:
+        qids: Candidate Wikidata entity ids.
+
+    Returns:
+        A SPARQL query string (selecting nothing if ``qids`` is empty).
+
+    Examples:
+        >>> q = music_entities_query(["Q151944", "Q42"])
+        >>> "VALUES ?item { wd:Q151944 wd:Q42 }" in q
+        True
+        >>> "wd:Q215380" in q  # musical group
+        True
+    """
+    values = " ".join(f"wd:{qid}" for qid in qids)
+    occupations = " ".join(f"wd:{qid}" for qid in _MUSIC_OCCUPATIONS)
+    return f"""
+SELECT DISTINCT ?item ?kind ?name ?mbid ?begin ?end ?birthplace ?genre ?article
+WHERE {{
+  VALUES ?item {{ {values} }}
+  {{
+    ?item wdt:P106 ?occ . VALUES ?occ {{ {occupations} }}
+    BIND("person" AS ?kind)
+  }}
+  UNION
+  {{ ?item wdt:P31 wd:Q215380 . BIND("group" AS ?kind) }}
+  OPTIONAL {{ ?item wdt:P434 ?mbid . }}
+  OPTIONAL {{ ?item wdt:P569 ?birth . }}
+  OPTIONAL {{ ?item wdt:P571 ?inception . }}
+  OPTIONAL {{ ?item wdt:P570 ?death . }}
+  OPTIONAL {{ ?item wdt:P576 ?dissolution . }}
+  BIND(COALESCE(?birth, ?inception) AS ?begin)
+  BIND(COALESCE(?death, ?dissolution) AS ?end)
+  OPTIONAL {{ ?item wdt:P19 ?birthplaceItem . }}
+  OPTIONAL {{ ?item wdt:P136 ?genreItem . }}
+  OPTIONAL {{
+    ?article schema:about ?item ; schema:isPartOf <{HUWIKI_PREFIX}> .
+  }}
+  SERVICE wikibase:label {{
+    bd:serviceParam wikibase:language "hu,en" .
+    ?item rdfs:label ?name .
+    ?birthplaceItem rdfs:label ?birthplace .
+    ?genreItem rdfs:label ?genre .
+  }}
+}}
+""".strip()
+
+
 class WikidataClient:
     """Polite async client over WDQS and the Hungarian Wikipedia API."""
 
@@ -435,6 +493,83 @@ class WikidataClient:
             if len(distinct) < page_size:
                 break
         return list(merged.values())
+
+    async def wbsearch(self, name: str, *, limit: int = 5) -> list[str]:
+        """Search Wikidata entities by label, returning candidate ids.
+
+        Uses the ``wbsearchentities`` action (Hungarian, English fallback) for a
+        fuzzy label lookup — the recall step of the per-name fallback, narrowed
+        afterwards by :meth:`fetch_music_entities`.
+
+        Args:
+            name: The act name to search for.
+            limit: Maximum candidate ids to return.
+
+        Returns:
+            Candidate Wikidata ids, best match first (possibly empty).
+        """
+        ids: list[str] = []
+        for lang in ("hu", "en"):
+            resp = await self._get(
+                WIKIDATA_API,
+                {
+                    "action": "wbsearchentities",
+                    "search": name,
+                    "language": lang,
+                    "uselang": lang,
+                    "type": "item",
+                    "limit": limit,
+                    "format": "json",
+                },
+                accept="application/json",
+            )
+            for hit in resp.json().get("search", []):
+                if hit["id"] not in ids:
+                    ids.append(hit["id"])
+            if ids:
+                break
+        return ids[:limit]
+
+    async def fetch_music_entities(self, qids: list[str]) -> list[ArtistInfo]:
+        """Resolve candidate ids to the music entities among them.
+
+        Args:
+            qids: Candidate Wikidata ids (see :meth:`wbsearch`).
+
+        Returns:
+            One merged :class:`ArtistInfo` per id that is a musician/band.
+        """
+        if not qids:
+            return []
+        bindings = await self.sparql(music_entities_query(qids))
+        return merge_artists(parse_artist_binding(b) for b in bindings)
+
+    async def resolve_name(self, name: str) -> ArtistInfo | None:
+        """Resolve one act name to its best-matching music entity, or ``None``.
+
+        Searches by label, keeps only music entities, and accepts the candidate
+        whose name best matches ours (normalized exact, else a high fuzzy ratio)
+        so a same-named non-musician can't slip through.
+
+        Args:
+            name: The act name (a credit string from our data).
+
+        Returns:
+            The matched :class:`ArtistInfo`, or ``None``.
+        """
+        from rapidfuzz import fuzz
+
+        from src.enrich.match import normalize
+
+        candidates = await self.fetch_music_entities(await self.wbsearch(name))
+        target = normalize(name)
+        best: ArtistInfo | None = None
+        best_score = 0.0
+        for info in candidates:
+            score = fuzz.token_sort_ratio(target, normalize(info.name))
+            if score > best_score:
+                best, best_score = info, score
+        return best if best is not None and best_score >= 90 else None
 
     async def huwiki_extract(self, title: str) -> str | None:
         """Fetch the intro (lead) paragraph of a Hungarian Wikipedia article.

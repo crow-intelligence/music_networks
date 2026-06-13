@@ -189,6 +189,9 @@ class Artist(Base):
     huwiki_title: Mapped[str | None] = mapped_column(String(400))
     huwiki_url: Mapped[str | None] = mapped_column(String(600))
     description: Mapped[str | None] = mapped_column(UnicodeText)
+    # Cultural-salience proxy: average monthly Hungarian-Wikipedia pageviews
+    # (Wikimedia REST API, 2015-07+). Reflects *lasting* salience of the act.
+    avg_monthly_pageviews: Mapped[float | None] = mapped_column()
 
 
 class ArtistExternal(Base):
@@ -305,6 +308,37 @@ class EnrichState(Base):
     last_error: Mapped[str | None] = mapped_column(String(500))
 
 
+# ---------------------------------------------------------------------------
+# External popularity (chart) data
+# ---------------------------------------------------------------------------
+class ChartEntry(Base):
+    """One ranked entry from an external popularity chart (e.g. Mahász).
+
+    Stores the scraped chart line verbatim (``artist_raw``/``title_raw``/
+    ``label``) so the source data is preserved, plus best-effort foreign keys to
+    our own :class:`Performer` (the act that charted) and :class:`Song` (when a
+    title match is confident). Unique on ``(source, chart, year, rank)`` so
+    re-scraping a year upserts instead of duplicating.
+    """
+
+    __tablename__ = "chart_entry"
+    __table_args__ = (UniqueConstraint("source", "chart", "year", "rank"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(40), index=True)  # e.g. 'mahasz'
+    chart: Mapped[str] = mapped_column(String(40), index=True)  # 'album'|'single'|…
+    year: Mapped[int] = mapped_column(index=True)
+    rank: Mapped[int] = mapped_column()
+    artist_raw: Mapped[str] = mapped_column(String(400))
+    title_raw: Mapped[str | None] = mapped_column(String(600))
+    label: Mapped[str | None] = mapped_column(String(200))
+    # Best-effort links to our own data (nullable until matched).
+    performer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("performer.id"), index=True
+    )
+    song_id: Mapped[int | None] = mapped_column(ForeignKey("song.id"), index=True)
+
+
 def _enable_sqlite_pragmas(dbapi_conn, _record) -> None:
     """Enable WAL mode and a busy timeout on every new SQLite connection.
 
@@ -365,20 +399,28 @@ def _add_missing_columns(sync_conn) -> None:
     """Add columns introduced after a table's first creation (SQLite migration).
 
     ``Base.metadata.create_all`` only creates missing *tables*, never missing
-    *columns*. The ``artist_id`` foreign keys were added to the pre-existing
-    ``performer``/``person`` tables, so back-fill them with a plain nullable
-    column when absent. Idempotent: a column already present is skipped.
+    *columns*. Columns added to pre-existing tables (the ``artist_id`` foreign
+    keys on ``performer``/``person``; ``avg_monthly_pageviews`` on ``artist``)
+    are back-filled here as plain nullable columns. Idempotent: a column already
+    present is skipped.
     """
     from sqlalchemy import inspect, text
 
     inspector = inspect(sync_conn)
     existing_tables = set(inspector.get_table_names())
-    for table, column in (("performer", "artist_id"), ("person", "artist_id")):
+    migrations = (
+        ("performer", "artist_id", "INTEGER"),
+        ("person", "artist_id", "INTEGER"),
+        ("artist", "avg_monthly_pageviews", "REAL"),
+    )
+    for table, column, sqltype in migrations:
         if table not in existing_tables:
-            continue  # fresh DB: create_all already added the column with its FK
+            continue  # fresh DB: create_all already added the column
         columns = {col["name"] for col in inspector.get_columns(table)}
         if column not in columns:
-            sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} INTEGER"))
+            sync_conn.execute(
+                text(f"ALTER TABLE {table} ADD COLUMN {column} {sqltype}")
+            )
 
 
 async def create_all(engine: AsyncEngine) -> None:
