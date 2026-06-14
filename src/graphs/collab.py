@@ -359,38 +359,28 @@ def _score_ranking(
 
 def community_breakdown(
     graph: nx.Graph,
-    backbone: nx.Graph,
+    communities: list[Any],
     pagerank: dict[Any, float],
+    total: int,
     *,
     top: int = 5,
     members: int = 3,
-    seed: int = 42,
 ) -> list[dict[str, Any]]:
-    """Break the backbone into Louvain communities, largest first.
+    """Summarize the largest communities (from a precomputed partition).
 
     Args:
         graph: The full graph (for member labels).
-        backbone: The disparity backbone (communities are detected on it).
+        communities: Louvain communities, **largest first**.
         pagerank: Node → PageRank, to pick each community's central members.
+        total: Backbone node count (the ``share`` denominator).
         top: How many of the largest communities to report.
         members: How many central members to name per community.
-        seed: Louvain RNG seed (determinism).
 
     Returns:
         Rows ``{"id", "size", "share", "members"}`` for the largest communities;
         ``share`` is the fraction of backbone nodes, ``members`` the most central
         names.
     """
-    import networkx as nx
-
-    if not backbone.number_of_edges():
-        return []
-    communities: list[Any] = sorted(
-        nx.community.louvain_communities(backbone, weight="weight", seed=seed),
-        key=len,
-        reverse=True,
-    )
-    total = backbone.number_of_nodes() or 1
     out = []
     for i, community in enumerate(communities[:top]):
         ranked = sorted(community, key=lambda n: pagerank.get(n, 0.0), reverse=True)
@@ -398,26 +388,92 @@ def community_breakdown(
             {
                 "id": i,
                 "size": len(community),
-                "share": round(len(community) / total, 4),
+                "share": round(len(community) / (total or 1), 4),
                 "members": [_label(graph, n) for n in ranked[:members]],
             }
         )
     return out
 
 
+def layout_map(
+    graph: nx.Graph,
+    backbone: nx.Graph,
+    pagerank: dict[Any, float],
+    node_community: dict[Any, int],
+    *,
+    top: int = 250,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Precompute a 2D force layout of the backbone's most influential core.
+
+    A collaboration backbone is fragmented (co-writing happens in small fixed
+    teams), so this maps the backbone's **largest connected component** — the
+    coherent collaboration core — rather than top hubs scattered across many
+    disconnected clusters. If that core exceeds ``top`` nodes it is trimmed to the
+    top by PageRank (then re-restricted to the largest component, so the map stays
+    connected). Nodes are spring-laid-out and rescaled to a ``[50, 950]`` box;
+    everything is computed once at build time so the page ships no layout engine.
+
+    Args:
+        graph: The full graph (for labels + degree).
+        backbone: The disparity backbone.
+        pagerank: Node → PageRank.
+        node_community: Node → community index (0 = largest community).
+        top: Max nodes to place (keeps the canvas renderable + connected).
+        seed: Layout RNG seed (determinism).
+
+    Returns:
+        ``{"nodes": [{"id", "x", "y", "pr", "c", "deg"}], "edges": [[i, j], ...]}``.
+    """
+    import networkx as nx
+
+    if not backbone.number_of_edges():
+        return {"nodes": [], "edges": []}
+    core = max(nx.connected_components(backbone), key=len)
+    sub = backbone.subgraph(core)
+    if sub.number_of_nodes() > top:
+        chosen = sorted(sub.nodes(), key=lambda n: pagerank.get(n, 0.0), reverse=True)
+        sub = sub.subgraph(chosen[:top])
+        if sub.number_of_edges():
+            sub = sub.subgraph(max(nx.connected_components(sub), key=len))
+    pos = nx.spring_layout(sub, weight="weight", seed=seed)
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    spanx = (max(xs) - min(xs)) or 1.0
+    spany = (max(ys) - min(ys)) or 1.0
+    max_pr = max((pagerank.get(n, 0.0) for n in sub.nodes()), default=1.0) or 1.0
+    index = {n: i for i, n in enumerate(sub.nodes())}
+    nodes = [
+        {
+            "id": _label(graph, n),
+            "x": round(900 * (pos[n][0] - min(xs)) / spanx + 50, 1),
+            "y": round(900 * (pos[n][1] - min(ys)) / spany + 50, 1),
+            "pr": round(pagerank.get(n, 0.0) / max_pr, 4),
+            "c": node_community.get(n, 0),
+            "deg": graph.degree(n),
+        }
+        for n in sub.nodes()
+    ]
+    edges = [[index[u], index[v]] for u, v in sub.edges()]
+    return {"nodes": nodes, "edges": edges}
+
+
 def summarize(graph: nx.Graph, bb: nx.Graph) -> dict[str, Any]:
-    """Summarize a slice: sizes + the three centrality rankings + communities.
+    """Summarize a slice: sizes, centrality rankings, communities, and a 2D map.
 
     PageRank (influence) and degree (reach) are computed on the full graph;
     betweenness (bridges) on the **backbone**, where it is both fast and meaningful
-    — the significant structure is where community-bridging actually shows.
+    — the significant structure is where community-bridging actually shows. The
+    Louvain partition is computed once and reused for the community breakdown and
+    the map's node colors.
 
     Args:
         graph: The full collaboration graph.
         bb: Its disparity-filter backbone.
 
     Returns:
-        A JSON-serializable summary dict (sizes, ``metrics``, ``communities``).
+        A JSON-serializable summary dict (sizes, ``metrics``, ``communities``,
+        ``map``).
     """
     import networkx as nx
 
@@ -427,6 +483,16 @@ def summarize(graph: nx.Graph, bb: nx.Graph) -> dict[str, Any]:
         if bb.number_of_edges()
         else {}
     )
+    communities: list[Any] = (
+        sorted(
+            nx.community.louvain_communities(bb, weight="weight", seed=42),
+            key=len,
+            reverse=True,
+        )
+        if bb.number_of_edges()
+        else []
+    )
+    node_community = {n: i for i, com in enumerate(communities) for n in com}
     return {
         "nodes": graph.number_of_nodes(),
         "edges": graph.number_of_edges(),
@@ -437,7 +503,10 @@ def summarize(graph: nx.Graph, bb: nx.Graph) -> dict[str, Any]:
             "betweenness": _score_ranking(graph, betweenness),
             "pagerank": _score_ranking(graph, pagerank),
         },
-        "communities": community_breakdown(graph, bb, pagerank),
+        "communities": community_breakdown(
+            graph, communities, pagerank, bb.number_of_nodes()
+        ),
+        "map": layout_map(graph, bb, pagerank, node_community),
     }
 
 

@@ -167,6 +167,12 @@
   .comm-bar { height: 20px; border-radius: 3px; min-width: 3px; }
   .comm-label { font-size: 0.85rem; }
   .comm-label .cpct { font-weight: 700; color: var(--ink); }
+  .net-canvas { width: 100%; height: 560px; background: var(--card-bg); border: 1px solid var(--line); border-radius: 4px; touch-action: none; cursor: grab; display: block; }
+  .net-canvas:active { cursor: grabbing; }
+  .net-search { font: inherit; font-size: 0.85rem; padding: 6px 10px; min-height: 36px; min-width: 260px; background: var(--card-bg); color: var(--body); border: 1px solid var(--line); border-radius: 4px; }
+  .net-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 14px; margin: var(--sp-1) 0; font-size: 0.82rem; color: var(--muted); }
+  .net-legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .net-hint { color: var(--muted); font-size: 0.8rem; font-style: italic; margin: var(--sp-1) 0 0; }
   /* §8 ego network */
   .ego-fig { margin: 0; max-width: 760px; }
   .ego-fig svg { margin: 0 auto; }
@@ -1245,12 +1251,7 @@ function egoSVG(graph, seed, count) {
       sel.value = cur;
       host.innerHTML = "";
       const s = slices[cur];
-      if (view === "view") {
-        const p = document.createElement("p"); p.className = "note";
-        p.textContent = "A vizuális, interaktív hálózati térkép (csomópont-méret = PageRank, szín = közösség, ego-keresés) hamarosan érkezik.";
-        host.appendChild(p);
-        return;
-      }
+      if (view === "view") { networkMap(host, s.map, s.communities); return; }
       const stats = document.createElement("p"); stats.className = "collab-stats";
       stats.innerHTML = `${s.nodes.toLocaleString("hu")} alkotó · ${s.edges.toLocaleString("hu")} él ` +
         `→ backbone <strong>${s.backbone_nodes.toLocaleString("hu")}</strong> csomópont / ${s.backbone_edges.toLocaleString("hu")} él`;
@@ -1265,6 +1266,100 @@ function egoSVG(graph, seed, count) {
         m.pagerank || [], {normalize: true}));
       host.appendChild(grid);
       if ((s.communities || []).length) host.appendChild(communities(s.communities));
+    }
+
+    // The 2D backbone map: top-PageRank core, force-laid-out at build time.
+    // Node size ∝ PageRank, color = Louvain community; drag to pan, wheel to
+    // zoom, and the search box dims everything but an artist's ego network.
+    function networkMap(host, map, comms) {
+      const nodes = (map && map.nodes) || [], edges = (map && map.edges) || [];
+      if (!nodes.length) {
+        const e = document.createElement("p"); e.className = "empty";
+        e.textContent = "Nincs hálózati térkép ehhez a szelethez (túl kicsi a backbone).";
+        host.appendChild(e); return;
+      }
+      const colorOf = c => PALETTE[c % PALETTE.length];
+      const adj = nodes.map(() => []);
+      edges.forEach(([i, j]) => { adj[i].push(j); adj[j].push(i); });
+
+      const bar = document.createElement("div"); bar.className = "controls";
+      const search = document.createElement("input");
+      search.type = "search"; search.className = "net-search";
+      search.placeholder = "Alkotó kiemelése… (pl. presser gábor)";
+      search.setAttribute("aria-label", "Alkotó kiemelése a hálózatban");
+      bar.appendChild(search);
+
+      const svg = s("svg", {class: "net-canvas", role: "img",
+        "aria-label": "Alkotói hálózat térkép — csomópont = alkotó, méret = PageRank, szín = közösség."});
+      const gE = s("g", {}), gN = s("g", {});
+      const edgeEls = edges.map(([i, j]) => {
+        const ln = s("line", {x1: nodes[i].x, y1: nodes[i].y, x2: nodes[j].x, y2: nodes[j].y,
+          stroke: cssVar("--ctx", "#b6b0a2"), "stroke-width": 0.7});
+        gE.appendChild(ln); return ln;
+      });
+      const rOf = pr => 3 + 17 * Math.sqrt(Math.max(0, pr));
+      const nodeEls = nodes.map(n => {
+        const c = s("circle", {cx: n.x, cy: n.y, r: rOf(n.pr), fill: colorOf(n.c),
+          stroke: PAPER, "stroke-width": 0.6});
+        bindTip(c, `<b>${n.id}</b><br>${n.deg} kapcsolat`);
+        gN.appendChild(c); return c;
+      });
+      svg.append(gE, gN);
+
+      // viewBox pan/zoom.
+      let vb = {x: 0, y: 0, w: 1000, h: 1000};
+      const applyVB = () => svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+      applyVB();
+      const toSvg = e => { const r = svg.getBoundingClientRect();
+        return {x: vb.x + (e.clientX - r.left) / r.width * vb.w, y: vb.y + (e.clientY - r.top) / r.height * vb.h}; };
+      svg.addEventListener("wheel", e => {
+        e.preventDefault(); const f = e.deltaY < 0 ? 0.85 : 1.18; const p = toSvg(e);
+        if (vb.w * f > 4000 || vb.w * f < 40) return;
+        vb = {x: p.x - (p.x - vb.x) * f, y: p.y - (p.y - vb.y) * f, w: vb.w * f, h: vb.h * f}; applyVB();
+      }, {passive: false});
+      let drag = null;
+      svg.addEventListener("pointerdown", e => { drag = {cx: e.clientX, cy: e.clientY, x: vb.x, y: vb.y}; svg.setPointerCapture(e.pointerId); });
+      svg.addEventListener("pointermove", e => {
+        if (!drag) return; const r = svg.getBoundingClientRect();
+        vb.x = drag.x - (e.clientX - drag.cx) / r.width * vb.w;
+        vb.y = drag.y - (e.clientY - drag.cy) / r.height * vb.h; applyVB();
+      });
+      const endDrag = () => { drag = null; };
+      svg.addEventListener("pointerup", endDrag);
+      svg.addEventListener("pointercancel", endDrag);
+
+      // Ego search: dim all but the matched artist(s) + direct collaborators.
+      function highlight(term) {
+        term = term.trim().toLowerCase();
+        if (!term) {
+          nodeEls.forEach(e => { e.style.opacity = 1; e.setAttribute("stroke", PAPER); });
+          edgeEls.forEach(e => e.style.opacity = 1); return;
+        }
+        const match = new Set();
+        nodes.forEach((n, i) => { if (n.id.toLowerCase().includes(term)) match.add(i); });
+        const keep = new Set(match);
+        match.forEach(i => adj[i].forEach(j => keep.add(j)));
+        nodeEls.forEach((e, i) => {
+          e.style.opacity = keep.has(i) ? 1 : 0.07;
+          e.setAttribute("stroke", match.has(i) ? INK : PAPER);
+          e.setAttribute("stroke-width", match.has(i) ? 2 : 0.6);
+        });
+        edgeEls.forEach((e, k) => {
+          const [i, j] = edges[k];
+          e.style.opacity = (match.has(i) || match.has(j)) ? 0.95 : 0.03;
+        });
+      }
+      search.addEventListener("input", () => highlight(search.value));
+
+      const legend = document.createElement("div"); legend.className = "net-legend";
+      (comms || []).forEach((com, i) => {
+        const sp = document.createElement("span");
+        sp.innerHTML = `<span class="sw" style="background:${colorOf(i)}"></span>${com.members[0] || ("Közösség " + (i + 1))} köre`;
+        legend.appendChild(sp);
+      });
+      const hint = document.createElement("p"); hint.className = "net-hint";
+      hint.textContent = "A térkép a backbone legnagyobb összefüggő magját mutatja (a társírás jellemzően kis, különálló csapatokban zajlik). Húzd a mozgatáshoz, görgess a nagyításhoz; a részletes rangsorok a „Hálózati mutatók” nézetben.";
+      host.append(bar, svg, legend, hint);
     }
     draw();
   }
