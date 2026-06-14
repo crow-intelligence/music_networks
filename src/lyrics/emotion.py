@@ -1,16 +1,18 @@
 """Per-song emotion classification over the lyrics corpus.
 
-Runs the Hungarian emotion classifier
-`visegradmedia-emotion/Emotion_RoBERTa_hungarian6 <https://huggingface.co/visegradmedia-emotion/Emotion_RoBERTa_hungarian6>`_
-(an ``xlm-roberta-base`` sequence classifier, 6 labels) over the cleaned
-natural-language ``text`` view of each :class:`~src.lyrics.corpus.SongDoc`, then
-aggregates the predictions **overall** and **by decade** for the dashboard.
+Runs the multilingual emotion classifier
+`MilaNLProc/xlm-emo-t <https://huggingface.co/MilaNLProc/xlm-emo-t>`_ (XLM-EMO,
+an ``xlm-roberta-base`` sequence classifier trained on multilingual tweet emotion
+data **including Hungarian**) over the cleaned natural-language ``text`` view of
+each :class:`~src.lyrics.corpus.SongDoc`, then aggregates the predictions
+**overall** and **by decade** for the dashboard.
 
-Label order was verified empirically against unambiguous Hungarian probe
-sentences (one clearly-joyful, one fearful, …): the model's ``LABEL_i`` map to
-:data:`EMOTIONS` ``[anger, fear, disgust, sadness, joy, none]`` — matching the
-model card's stated order. ``none`` means "no clear emotion" (the model's sixth
-class), not "missing data".
+The model's own ``config.id2label`` names the four classes directly — they map to
+:data:`EMOTIONS` ``[anger, fear, joy, sadness]`` (no guessing required). It
+replaces an earlier news/media-trained model that was unfit for poetic lyrics
+(it dumped whimsical/narrative songs into a "fear" catch-all and almost never saw
+joy — e.g. it rated the happy children's song *"Egy csuda-csuda réten"* as
+fear 0.97). XLM-EMO detects joy in such songs.
 
 The run is **resumable**: each song's prediction is appended to
 ``per_song.jsonl`` as it completes, and a re-run skips song ids already present.
@@ -32,15 +34,15 @@ from typing import Any
 
 from src.lyrics.corpus import DEFAULT_CORPUS_DIR, SongDoc, load_corpus
 
-# Verified label order (see module docstring): config LABEL_0..5 in this order.
-EMOTIONS: tuple[str, ...] = ("anger", "fear", "disgust", "sadness", "joy", "none")
+# XLM-EMO's config.id2label order (0..3) — named by the model, not inferred.
+EMOTIONS: tuple[str, ...] = ("anger", "fear", "joy", "sadness")
 
-MODEL_NAME = "visegradmedia-emotion/Emotion_RoBERTa_hungarian6"
+MODEL_NAME = "MilaNLProc/xlm-emo-t"
 DEFAULT_EMOTION_DIR = Path("data/processed/emotion")
 _PER_SONG = "per_song.jsonl"
 
-# The model is xlm-roberta-base (max position 514). Leave room for <s>/</s>, so
-# chunk the content token ids in blocks of this size.
+# xlm-roberta-base (max position 514). Leave room for <s>/</s>, so chunk the
+# content token ids in blocks of this size.
 MODEL_MAX_TOKENS = 512
 CHUNK_LEN = MODEL_MAX_TOKENS - 2
 # Cap how many chunks of a single (very long) song we score — lyrics rarely need
@@ -111,8 +113,7 @@ def mean_pool(
     # even when a weight is so small that ``value * weight`` would underflow.
     norm = [w / total for w in weights]
     return [
-        sum(v[j] * w for v, w in zip(vectors, norm, strict=True))
-        for j in range(width)
+        sum(v[j] * w for v, w in zip(vectors, norm, strict=True)) for j in range(width)
     ]
 
 
@@ -127,9 +128,9 @@ def dominant_emotion(probs: list[float], labels: tuple[str, ...] = EMOTIONS) -> 
         The label with the greatest probability.
 
     Examples:
-        >>> dominant_emotion([0.1, 0.0, 0.0, 0.0, 0.7, 0.2])
+        >>> dominant_emotion([0.1, 0.0, 0.7, 0.2])
         'joy'
-        >>> dominant_emotion([0.5, 0.5, 0.0, 0.0, 0.0, 0.0])
+        >>> dominant_emotion([0.5, 0.5, 0.0, 0.0])
         'anger'
     """
     if len(probs) != len(labels):
@@ -160,9 +161,9 @@ def aggregate(
 
     Examples:
         >>> rows = [
-        ...     {"decade": 1990, "probs": [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]},
-        ...     {"decade": 1990, "probs": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
-        ...     {"decade": 2000, "probs": [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]},
+        ...     {"decade": 1990, "probs": [0.0, 0.0, 1.0, 0.0]},  # joy
+        ...     {"decade": 1990, "probs": [1.0, 0.0, 0.0, 0.0]},  # anger
+        ...     {"decade": 2000, "probs": [0.0, 0.0, 0.0, 1.0]},  # sadness
         ... ]
         >>> agg = aggregate(rows)
         >>> agg["overall"]["n"]

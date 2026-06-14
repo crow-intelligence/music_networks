@@ -289,18 +289,17 @@
 </section>
 
 <section id="emotion"><h2>Érzelmek a dalszövegekben</h2>
-  <p class="note">A dalszövegek <strong>domináns érzelme</strong> egy magyar
-    XLM-RoBERTa érzelem-osztályozóval (harag, félelem, undor, szomorúság, öröm,
-    illetve „semleges”). Az oszlopok az adott évtized dalainak érzelmi megoszlását
+  <p class="note">A dalszövegek <strong>domináns érzelme</strong> az
+    <em>XLM-EMO</em> többnyelvű érzelem-osztályozóval (XLM-RoBERTa, magyar nyelvet
+    is tartalmazó tanítóanyag) — négy érzelem: <strong>harag, félelem, öröm,
+    szomorúság</strong>. Az oszlopok az adott évtized dalainak érzelmi megoszlását
     mutatják (a domináns érzelem aránya), 100%-ra normálva; az „Összes” a teljes
     korpusz aggregátuma.</p>
-  <p class="note"><strong>Értelmezési fenntartás:</strong> a modellt
-    közösségi-média szövegekre tanították, itt viszont költői dalszövegekre
-    alkalmazzuk (tartományeltolódás). A „félelem” osztály a gyakorlatban tágan a
-    <em>bánatot, panaszt, szorongást</em> fogja össze (pl. a siratók, „sír-rí”
-    típusú szövegek ide kerülnek), és gyakran átfed a szomorúsággal; a haragot és
-    szomorúságot is összemossa. Az arányok tájékoztató jellegűek, nem
-    abszolút igazság.</p>
+  <p class="note"><strong>Értelmezési fenntartás:</strong> az automatikus
+    érzelemfelismerés költői szövegen közelítő — a négy érzelem kényszerített
+    választás (nincs „semleges”), és az árnyalt vagy ironikus dalszövegeket néha
+    félreérti. Az arányok tájékoztató jellegűek. (Egy korábbi, hírszövegre tanított
+    modellt lecseréltünk, mert az szinte sosem ismerte fel az örömöt.)</p>
   <div id="c-emotion"></div>
 </section>
 
@@ -1206,8 +1205,8 @@ function egoSVG(graph, seed, count) {
     const ed = DATA.emotion || {};
     const decs = ed.by_decade || [];
     if (!decs.length) { empty("c-emotion", "Nincs adat — előbb futtasd az érzelem-osztályozót (python -m src.lyrics.emotion run)."); return; }
-    const labelMap = {anger: "harag", fear: "félelem", disgust: "undor", sadness: "szomorúság", joy: "öröm", none: "semleges"};
-    const colorMap = {anger: "#aa3333", fear: "#7d3c98", disgust: "#5a7d2a", sadness: "#34568b", joy: "#caa53d", none: "#9a958a"};
+    const labelMap = {anger: "harag", fear: "félelem", joy: "öröm", sadness: "szomorúság"};
+    const colorMap = {anger: "#aa3333", fear: "#7d3c98", joy: "#caa53d", sadness: "#34568b"};
     const cats = (ed.labels || []).map(l => ({key: l, label: labelMap[l] || l, color: colorMap[l] || MUTED}));
     const rows = decs.map(d => ({decade: d.decade, n: d.n, share: d.share, low_n: d.n < 50}));
     stackedBars("c-emotion", rows, cats, {overall: ed.overall, ariaLabel: "Érzelmi megoszlás évtizedenként."});
@@ -1421,7 +1420,7 @@ function egoSVG(graph, seed, count) {
   // Műfaji összefüggések — emotion×genre + topic×genre heatmaps, lexdiv bars.
   (function () {
     const a = DATA.associations || {};
-    const emoLabel = {anger: "harag", fear: "félelem", disgust: "undor", sadness: "szomorúság", joy: "öröm", none: "semleges"};
+    const emoLabel = {anger: "harag", fear: "félelem", joy: "öröm", sadness: "szomorúság"};
     const matrix = block => block.rows.map(r => block.categories.map(c => r.shares[c]));
     if (a.emotion && a.emotion.rows.length) {
       heatmap("c-assoc-emotion", a.emotion.rows.map(r => r.genre),
