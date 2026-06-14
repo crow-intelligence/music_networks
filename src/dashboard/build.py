@@ -36,6 +36,7 @@ DEFAULT_USAGE_DIR = Path("data/processed/usage")
 DEFAULT_NETWORKS_DIR = Path("data/processed/networks")
 DEFAULT_EMOTION_DIR = Path("data/processed/emotion")
 DEFAULT_GENRE_DIR = Path("data/processed/genre")
+DEFAULT_COLLAB_DIR = Path("data/processed/collab")
 _TEMPLATE = Path(__file__).with_name("template.html")
 _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
@@ -182,6 +183,7 @@ def assemble_data(
     networks: dict[str, Any] | None = None,
     emotion: dict[str, Any] | None = None,
     genre: dict[str, Any] | None = None,
+    collab: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -197,6 +199,7 @@ def assemble_data(
         networks: The per-decade word-graph blocks (may be empty/``None``).
         emotion: The aggregated emotion blocks (may be empty/``None``).
         genre: The aggregated genre blocks (may be empty/``None``).
+        collab: The collaboration-network blocks (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -224,6 +227,7 @@ def assemble_data(
         "networks": networks or {},
         "emotion": emotion or {},
         "genre": genre or {},
+        "collab": collab or {},
     }
 
 
@@ -424,6 +428,30 @@ def load_genre(genre_dir: Path) -> dict[str, Any]:
     return {"genres": agg.get("genres", []), "overall": overall, "by_decade": kept}
 
 
+def load_collab(collab_dir: Path) -> dict[str, Any]:
+    """Load the collaboration-network summary, scoped to :data:`MIN_DECADE`+.
+
+    Args:
+        collab_dir: Directory with ``summary.json`` (see
+            :func:`src.graphs.collab.build_networks`): centrality rankings +
+            community breakdown per slice (``aggregate`` + ``decade_<d>``).
+
+    Returns:
+        ``{}`` if absent, else ``{"alpha", "slices"}`` with per-decade slices
+        below :data:`MIN_DECADE` dropped.
+    """
+    summary = _load_json(collab_dir / "summary.json", {})
+    if not summary:
+        return {}
+    kept: dict[str, Any] = {}
+    for name, sl in summary.get("slices", {}).items():
+        if name == "aggregate":
+            kept[name] = sl
+        elif name.startswith("decade_") and int(name.split("_")[1]) >= MIN_DECADE:
+            kept[name] = sl
+    return {"alpha": summary.get("alpha"), "slices": kept}
+
+
 def build(
     *,
     db_path: str = "data/music.db",
@@ -433,6 +461,7 @@ def build(
     networks_dir: Path | str = DEFAULT_NETWORKS_DIR,
     emotion_dir: Path | str = DEFAULT_EMOTION_DIR,
     genre_dir: Path | str = DEFAULT_GENRE_DIR,
+    collab_dir: Path | str = DEFAULT_COLLAB_DIR,
     out_path: Path | str = DEFAULT_OUT,
 ) -> Path:
     """Build the dashboard HTML from all cached artifacts.
@@ -445,6 +474,7 @@ def build(
         networks_dir: Per-decade word-graph artifacts dir.
         emotion_dir: Emotion artifacts dir (``emotion.json``).
         genre_dir: Genre artifacts dir (``genre.json``).
+        collab_dir: Collaboration-network artifacts dir (``summary.json``).
         out_path: Output HTML path.
 
     Returns:
@@ -498,6 +528,7 @@ def build(
 
     emotion = load_emotion(Path(emotion_dir))
     genre = load_genre(Path(genre_dir))
+    collab = load_collab(Path(collab_dir))
 
     data = assemble_data(
         overview=overview,
@@ -509,6 +540,7 @@ def build(
         networks=networks,
         emotion=emotion,
         genre=genre,
+        collab=collab,
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -533,6 +565,7 @@ def main() -> None:
     parser.add_argument("--networks-dir", default=str(DEFAULT_NETWORKS_DIR))
     parser.add_argument("--emotion-dir", default=str(DEFAULT_EMOTION_DIR))
     parser.add_argument("--genre-dir", default=str(DEFAULT_GENRE_DIR))
+    parser.add_argument("--collab-dir", default=str(DEFAULT_COLLAB_DIR))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
 
@@ -544,6 +577,7 @@ def main() -> None:
         networks_dir=args.networks_dir,
         emotion_dir=args.emotion_dir,
         genre_dir=args.genre_dir,
+        collab_dir=args.collab_dir,
         out_path=args.out,
     )
     folder = path.parent.resolve()

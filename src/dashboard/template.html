@@ -153,6 +153,20 @@
   .rank { margin: var(--sp-1) 0; padding-left: 1.4em; columns: 2; column-gap: var(--sp-3); font-size: 0.9rem; }
   .rank li { break-inside: avoid; margin-bottom: 2px; }
   .rank .pill { font-size: 0.68rem; }
+  /* §Alkotói hálózat — centrality tables + community bars */
+  .collab-stats { color: var(--muted); font-size: 0.85rem; margin: var(--sp-1) 0 var(--sp-2); }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-3); align-items: start; }
+  .metric-grid h3 { margin: 0 0 2px; }
+  .metric-cap { color: var(--muted); font-size: 0.78rem; font-style: italic; margin: 0 0 var(--sp-1); }
+  .rank-scroll { max-height: 430px; overflow-y: auto; border: 1px solid var(--line); border-radius: 3px; }
+  .metric-list { margin: 0; padding: 4px 4px 4px 2.4em; font-size: 0.9rem; list-style: decimal; }
+  .metric-list li { margin: 1px 0; padding-right: 6px; }
+  .metric-list li > span { display: flex; justify-content: space-between; gap: 10px; }
+  .metric-list .mname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .comm-row { display: grid; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; margin: 6px 0; }
+  .comm-bar { height: 20px; border-radius: 3px; min-width: 3px; }
+  .comm-label { font-size: 0.85rem; }
+  .comm-label .cpct { font-weight: 700; color: var(--ink); }
   /* §8 ego network */
   .ego-fig { margin: 0; max-width: 760px; }
   .ego-fig svg { margin: 0 auto; }
@@ -216,6 +230,7 @@
     <a href="#heatmap">Eltérés-hőtérkép</a>
     <a href="#drift">Kumulatív sodródás</a>
     <a href="#neighbors">Szomszédos szavak</a>
+    <a href="#collab">Alkotói hálózat</a>
     <a href="#stats">Modell-statisztika</a>
     <a href="#method">Módszertan</a>
   </nav>
@@ -299,6 +314,16 @@
   <div id="c-neighbors-controls" class="controls"></div>
   <div id="c-neighbors"></div>
   <p class="note" id="c-neighbors-cta"></p>
+</section>
+
+<section id="collab"><h2>Alkotói hálózat</h2>
+  <p class="note">Kik írnak együtt? A csomópontok <strong>szövegírók és zeneszerzők</strong>
+    (egy személyként egyesítve), az élek két alkotó közös dalainak számával súlyozva.
+    A <em>diszparitás-szűrő</em> backbone-ja a statisztikailag jelentős
+    együttműködések váza. Megjegyzés: ez az <strong>alkotói</strong> (nem előadói)
+    hálózat — a modern, jellemzően önírós rap/trap réteg ezért alulreprezentált.</p>
+  <div id="c-collab-controls" class="controls"></div>
+  <div id="c-collab"></div>
 </section>
 
 <section id="stats"><h2>Szókincs- és modell-statisztika</h2>
@@ -1146,6 +1171,103 @@ function egoSVG(graph, seed, count) {
     const rows = decs.map(d => ({decade: d.decade, n: d.n, share: d.share, low_n: d.n < 50}));
     stackedBars("c-emotion", rows, cats, {overall: ed.overall, ariaLabel: "Érzelmi megoszlás évtizedenként."});
   })();
+
+  // Alkotói hálózat — songwriter collaboration network metrics: three centrality
+  // tables (reach / bridges / influence) + a Louvain community breakdown, by
+  // decade. The visual map ("Nézet") is a planned follow-up.
+  renderCollab();
+  function renderCollab() {
+    const cd = DATA.collab || {};
+    const slices = cd.slices || {};
+    const host = document.getElementById("c-collab");
+    const ctrls = document.getElementById("c-collab-controls");
+    const keys = Object.keys(slices);
+    if (!keys.length) {
+      empty("c-collab", "Nincs adat — előbb futtasd a hálózatépítőt (python -m src.graphs.collab).");
+      return;
+    }
+    const decKeys = keys.filter(k => k !== "aggregate").sort();
+    const order = (slices.aggregate ? ["aggregate"] : []).concat(decKeys);
+    const labelOf = k => k === "aggregate" ? "Összes" : k.replace("decade_", "") + "s";
+    let cur = order[0], view = "metrics";
+
+    const sel = document.createElement("select");
+    sel.setAttribute("aria-label", "Évtized");
+    order.forEach(k => { const o = document.createElement("option"); o.value = k; o.textContent = labelOf(k); sel.appendChild(o); });
+    sel.addEventListener("change", () => { cur = sel.value; draw(); });
+    const lbl = document.createElement("label"); lbl.textContent = "Évtized: "; lbl.appendChild(sel);
+    const viewTog = makeToggle(
+      [{label: "Hálózati mutatók", value: "metrics"}, {label: "Hálózat nézet", value: "view"}],
+      v => { view = v; draw(); }, "Alkotói hálózat nézetváltó");
+    ctrls.append(lbl, viewTog);
+
+    // One centrality table (ranked list, value pill); betweenness/pagerank are
+    // shown as a 0–100 index relative to the slice's top, degree as raw partners.
+    function metricTable(title, cap, rows, opts) {
+      const wrap = document.createElement("div");
+      const h = document.createElement("h3"); h.textContent = title;
+      const c = document.createElement("p"); c.className = "metric-cap"; c.textContent = cap;
+      wrap.append(h, c);
+      const box = document.createElement("div"); box.className = "rank-scroll";
+      const ol = document.createElement("ol"); ol.className = "metric-list";
+      const top = rows.length ? rows[0].value : 1;
+      rows.forEach(r => {
+        const v = opts.normalize ? Math.round(100 * r.value / (top || 1)) : r.value;
+        const li = document.createElement("li");
+        li.innerHTML = `<span><span class="mname">${r.name}</span><span class="pill">${v}${opts.suffix || ""}</span></span>`;
+        ol.appendChild(li);
+      });
+      box.appendChild(ol); wrap.appendChild(box);
+      return wrap;
+    }
+
+    function communities(list) {
+      const wrap = document.createElement("div");
+      const h = document.createElement("h3"); h.textContent = "Közösségek (a backbone klaszterei)";
+      const c = document.createElement("p"); c.className = "metric-cap";
+      c.textContent = "Louvain-közösségek mérete (a backbone arányában), a legközpontibb tagokkal.";
+      wrap.append(h, c);
+      const maxShare = Math.max(...list.map(x => x.share), 0.001);
+      list.forEach((com, i) => {
+        const row = document.createElement("div"); row.className = "comm-row";
+        const bar = document.createElement("div"); bar.className = "comm-bar";
+        bar.style.background = PALETTE[i % PALETTE.length];
+        bar.style.width = Math.max(4, 130 * com.share / maxShare) + "px";
+        bar.setAttribute("aria-hidden", "true");
+        const lab = document.createElement("div"); lab.className = "comm-label";
+        lab.innerHTML = `<span class="cpct">${Math.round(com.share * 100)}%</span> (n=${com.size}) · ${com.members.join(", ")}`;
+        row.append(bar, lab); wrap.appendChild(row);
+      });
+      return wrap;
+    }
+
+    function draw() {
+      sel.value = cur;
+      host.innerHTML = "";
+      const s = slices[cur];
+      if (view === "view") {
+        const p = document.createElement("p"); p.className = "note";
+        p.textContent = "A vizuális, interaktív hálózati térkép (csomópont-méret = PageRank, szín = közösség, ego-keresés) hamarosan érkezik.";
+        host.appendChild(p);
+        return;
+      }
+      const stats = document.createElement("p"); stats.className = "collab-stats";
+      stats.innerHTML = `${s.nodes.toLocaleString("hu")} alkotó · ${s.edges.toLocaleString("hu")} él ` +
+        `→ backbone <strong>${s.backbone_nodes.toLocaleString("hu")}</strong> csomópont / ${s.backbone_edges.toLocaleString("hu")} él`;
+      host.appendChild(stats);
+      const grid = document.createElement("div"); grid.className = "metric-grid";
+      const m = s.metrics || {};
+      grid.appendChild(metricTable("A legtöbb kapcsolat", "a legtöbb különböző alkotóval dolgozott együtt (fokszám)",
+        m.degree || [], {suffix: " társ"}));
+      grid.appendChild(metricTable("A legfontosabb közvetítők", "hidak: elkülönülő közösségeket kötnek össze (köztiség)",
+        m.betweenness || [], {normalize: true}));
+      grid.appendChild(metricTable("A legbefolyásosabbak", "fontos alkotókhoz kapcsolódnak (PageRank)",
+        m.pagerank || [], {normalize: true}));
+      host.appendChild(grid);
+      if ((s.communities || []).length) host.appendChild(communities(s.communities));
+    }
+    draw();
+  }
 })();
 </script>
 </body>

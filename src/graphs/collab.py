@@ -15,7 +15,8 @@ no heavy imports, at import time).
 
 Outputs (``data/processed/collab/``): ``<slice>_full.graphml`` +
 ``<slice>_backbone.graphml`` per slice, and a ``summary.json`` with per-slice
-sizes and top collaborators.
+sizes, the three centrality rankings (degree / betweenness / PageRank) and the
+Louvain community breakdown.
 """
 
 from __future__ import annotations
@@ -314,58 +315,129 @@ def build_graph(song_creators: Iterable[set[str]], display: dict[str, str]) -> n
 
 
 # ---------------------------------------------------------------------------
-# Network summary
+# Centrality metrics + community analysis
 # ---------------------------------------------------------------------------
-def top_collaborators(graph: nx.Graph, k: int = 15) -> list[dict[str, Any]]:
-    """Rank a graph's people by weighted degree (collaboration strength).
+def _label(graph: nx.Graph, node: Any) -> str:
+    """Return a node's display label (falling back to its key)."""
+    return graph.nodes[node].get("label", str(node))
+
+
+def degree_ranking(graph: nx.Graph, k: int = 50) -> list[dict[str, Any]]:
+    """Top people by **degree** — the count of distinct collaborators.
 
     Args:
-        graph: A built collaboration graph.
+        graph: The full collaboration graph.
         k: How many to return.
 
     Returns:
-        Up to ``k`` rows ``{"name", "strength", "partners", "songs"}``, strongest
-        first. ``strength`` sums incident edge weights; ``partners`` is the degree.
+        Rows ``{"name", "value", "strength", "songs"}`` (``value`` = degree),
+        most-connected first.
     """
     rows = []
     for node in graph.nodes():
         strength = sum(graph[node][j].get("weight", 1) for j in graph[node])
         rows.append(
             {
-                "name": graph.nodes[node].get("label", node),
+                "name": _label(graph, node),
+                "value": graph.degree(node),
                 "strength": int(strength),
-                "partners": graph.degree(node),
                 "songs": int(graph.nodes[node].get("songs", 0)),
             }
         )
-    rows.sort(key=lambda r: (r["strength"], r["partners"]), reverse=True)
+    rows.sort(key=lambda r: (r["value"], r["strength"]), reverse=True)
     return rows[:k]
 
 
+def _score_ranking(
+    graph: nx.Graph, scores: dict[Any, float], k: int = 50
+) -> list[dict[str, Any]]:
+    """Rank nodes by a precomputed centrality score (descending)."""
+    rows = [{"name": _label(graph, n), "value": round(s, 6)} for n, s in scores.items()]
+    rows.sort(key=lambda r: r["value"], reverse=True)
+    return rows[:k]
+
+
+def community_breakdown(
+    graph: nx.Graph,
+    backbone: nx.Graph,
+    pagerank: dict[Any, float],
+    *,
+    top: int = 5,
+    members: int = 3,
+    seed: int = 42,
+) -> list[dict[str, Any]]:
+    """Break the backbone into Louvain communities, largest first.
+
+    Args:
+        graph: The full graph (for member labels).
+        backbone: The disparity backbone (communities are detected on it).
+        pagerank: Node → PageRank, to pick each community's central members.
+        top: How many of the largest communities to report.
+        members: How many central members to name per community.
+        seed: Louvain RNG seed (determinism).
+
+    Returns:
+        Rows ``{"id", "size", "share", "members"}`` for the largest communities;
+        ``share`` is the fraction of backbone nodes, ``members`` the most central
+        names.
+    """
+    import networkx as nx
+
+    if not backbone.number_of_edges():
+        return []
+    communities: list[Any] = sorted(
+        nx.community.louvain_communities(backbone, weight="weight", seed=seed),
+        key=len,
+        reverse=True,
+    )
+    total = backbone.number_of_nodes() or 1
+    out = []
+    for i, community in enumerate(communities[:top]):
+        ranked = sorted(community, key=lambda n: pagerank.get(n, 0.0), reverse=True)
+        out.append(
+            {
+                "id": i,
+                "size": len(community),
+                "share": round(len(community) / total, 4),
+                "members": [_label(graph, n) for n in ranked[:members]],
+            }
+        )
+    return out
+
+
 def summarize(graph: nx.Graph, bb: nx.Graph) -> dict[str, Any]:
-    """Summarize a slice: full/backbone sizes, communities, top collaborators.
+    """Summarize a slice: sizes + the three centrality rankings + communities.
+
+    PageRank (influence) and degree (reach) are computed on the full graph;
+    betweenness (bridges) on the **backbone**, where it is both fast and meaningful
+    — the significant structure is where community-bridging actually shows.
 
     Args:
         graph: The full collaboration graph.
         bb: Its disparity-filter backbone.
 
     Returns:
-        A JSON-serializable summary dict.
+        A JSON-serializable summary dict (sizes, ``metrics``, ``communities``).
     """
     import networkx as nx
 
-    communities = (
-        nx.community.louvain_communities(bb, weight="weight", seed=42)
+    pagerank = nx.pagerank(graph, weight="weight") if graph.number_of_edges() else {}
+    betweenness = (
+        nx.betweenness_centrality(bb, weight=None, normalized=True)
         if bb.number_of_edges()
-        else []
+        else {}
     )
     return {
         "nodes": graph.number_of_nodes(),
         "edges": graph.number_of_edges(),
         "backbone_nodes": bb.number_of_nodes(),
         "backbone_edges": bb.number_of_edges(),
-        "backbone_communities": len(communities),
-        "top_collaborators": top_collaborators(graph),
+        "metrics": {
+            "degree": degree_ranking(graph),
+            "betweenness": _score_ranking(graph, betweenness),
+            "pagerank": _score_ranking(graph, pagerank),
+        },
+        "communities": community_breakdown(graph, bb, pagerank),
     }
 
 
@@ -434,13 +506,19 @@ def main() -> None:
         print(
             f"  {name:16s} nodes={s['nodes']:6d} edges={s['edges']:7d} -> "
             f"backbone nodes={s['backbone_nodes']:5d} "
-            f"edges={s['backbone_edges']:6d} ({s['backbone_communities']} comm.)"
+            f"edges={s['backbone_edges']:6d} ({len(s['communities'])} top comm.)"
         )
-    agg_top = summary["slices"]["aggregate"]["top_collaborators"][:8]
-    print("  top collaborators (aggregate, by strength):")
-    for r in agg_top:
+    agg = summary["slices"]["aggregate"]
+    print("  most connected (aggregate, by degree):")
+    for r in agg["metrics"]["degree"][:6]:
         name = r["name"][:28]
-        print(f"    {name:28s} strength={r['strength']:5d} partners={r['partners']}")
+        print(f"    {name:28s} partners={r['value']:4d} strength={r['strength']}")
+    print("  largest backbone communities:")
+    for com in agg["communities"]:
+        print(
+            f"    #{com['id']} ({com['share']:.0%}, n={com['size']}): "
+            f"{', '.join(com['members'])}"
+        )
 
 
 if __name__ == "__main__":
