@@ -376,6 +376,29 @@ def save_artifacts(
     )
 
 
+def save_assignments(
+    docs: list[SongDoc],
+    topics: list[int],
+    out_dir: Path | str = DEFAULT_TOPICS_DIR,
+) -> None:
+    """Persist each song's assigned topic id (for per-song joins, e.g. × genre).
+
+    Args:
+        docs: The corpus, in the order passed to :func:`build_topic_model`.
+        topics: The per-doc topic assignment it returned.
+        out_dir: Output directory.
+    """
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    mapping = {
+        str(doc.song_id): int(tid)
+        for doc, tid in zip(docs, topics, strict=True)
+    }
+    (out / "assignments.json").write_text(
+        json.dumps(mapping, ensure_ascii=False), encoding="utf-8"
+    )
+
+
 def main() -> None:
     """Build topics from the cached corpus and write JSON artifacts.
 
@@ -412,7 +435,7 @@ def main() -> None:
         embeddings = compute_embeddings(docs)
         np.save(emb_path, embeddings)
 
-    topic_model, _ = build_topic_model(
+    topic_model, topics = build_topic_model(
         docs, embeddings, min_cluster_size=args.min_cluster_size
     )
     info = topic_info(topic_model)
@@ -421,6 +444,7 @@ def main() -> None:
     curated = load_topic_names(out / "topic_names.json")
     info = merge_names(info, curated)
     save_artifacts(info, over_time, args.out_dir)
+    save_assignments(docs, topics, args.out_dir)
 
     n_topics = sum(1 for r in info if r["topic_id"] != -1)
     print(f"Built {n_topics} topics from {len(docs)} docs -> {args.out_dir}")

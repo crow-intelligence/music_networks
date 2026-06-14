@@ -173,6 +173,12 @@
   .net-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 14px; margin: var(--sp-1) 0; font-size: 0.82rem; color: var(--muted); }
   .net-legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .net-hint { color: var(--muted); font-size: 0.8rem; font-style: italic; margin: var(--sp-1) 0 0; }
+  /* Reusable horizontal bar list (rhyme density, lexical diversity, schemes) */
+  .barlist { margin: var(--sp-1) 0 var(--sp-2); }
+  .barlist-row { display: grid; grid-template-columns: 132px 1fr 60px; gap: 10px; align-items: center; margin: 4px 0; font-size: 0.85rem; }
+  .barlist-row .blab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .barlist-bar { height: 16px; border-radius: 3px; background: var(--c1); min-width: 2px; }
+  .barlist-val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
   /* §8 ego network */
   .ego-fig { margin: 0; max-width: 760px; }
   .ego-fig svg { margin: 0 auto; }
@@ -232,6 +238,8 @@
     <a href="#topics">Témák az időben</a>
     <a href="#genre">Műfajok</a>
     <a href="#emotion">Érzelmek</a>
+    <a href="#associations">Műfaji összefüggések</a>
+    <a href="#rhyme">Rímek</a>
     <a href="#change">Jelentésváltozás</a>
     <a href="#heatmap">Eltérés-hőtérkép</a>
     <a href="#drift">Kumulatív sodródás</a>
@@ -294,6 +302,33 @@
     szomorúságot is összemossa. Az arányok tájékoztató jellegűek, nem
     abszolút igazság.</p>
   <div id="c-emotion"></div>
+</section>
+
+<section id="associations"><h2>Műfaji összefüggések</h2>
+  <p class="note">Mi jár együtt mely műfajjal? A műfaji címkék a <strong>Discogs</strong>
+    kiadásokból származnak, így csak a címkézett részhalmazon értelmezhetők.</p>
+  <h3>Érzelem × műfaj</h3>
+  <p class="note">Az egyes műfajok dalainak domináns-érzelem megoszlása (soronként
+    100%). A „félelem” modell-torzítás miatt tág (ld. §Érzelmek), de a műfajok
+    közötti különbségek beszédesek — pl. a hiphop kiugróan haragos.</p>
+  <div id="c-assoc-emotion"></div>
+  <h3>Téma × műfaj</h3>
+  <p class="note">Mely témák dominálnak az egyes műfajokban (a műfaj dalainak
+    téma-megoszlása a legnagyobb témákra).</p>
+  <div id="c-assoc-topic"></div>
+  <h3>Lexikai változatosság műfajonként</h3>
+  <p class="note">MATTR (mozgóablakos típus–token arány) műfajonként — magasabb =
+    változatosabb szókincs.</p>
+  <div id="c-assoc-lexdiv"></div>
+</section>
+
+<section id="rhyme"><h2>Rímek</h2>
+  <p class="note">A rímelést a sorvégi szavakból elemezzük, magyar fonetikai
+    közelítéssel (a kétjegyű mássalhangzók és a magánhangzó-hosszúság kezelésével).
+    A <strong>rímsűrűség</strong> a tiszta rímben részt vevő sorok aránya; a magyar
+    dalszöveg erősen épít az <em>asszonáncra</em> (magánhangzó-rím), a
+    <em>ragrím</em> pedig a toldalékból fakadó „könnyű” rím.</p>
+  <div id="c-rhyme"></div>
 </section>
 
 <section id="change"><h2>Jelentésváltozás az időben</h2>
@@ -1363,6 +1398,84 @@ function egoSVG(graph, seed, count) {
     }
     draw();
   }
+
+  // Reusable horizontal bar list: rows [{label, value, sub?}].
+  function barList(host, rows, opts = {}) {
+    const max = opts.max || Math.max(...rows.map(r => r.value), 1e-9);
+    const wrap = document.createElement("div"); wrap.className = "barlist";
+    rows.forEach(r => {
+      const row = document.createElement("div"); row.className = "barlist-row";
+      const lab = document.createElement("div"); lab.className = "blab"; lab.textContent = r.label;
+      const track = document.createElement("div");
+      const bar = document.createElement("div"); bar.className = "barlist-bar";
+      bar.style.width = Math.max(2, 100 * r.value / max) + "%";
+      if (opts.color) bar.style.background = opts.color;
+      track.appendChild(bar);
+      const val = document.createElement("div"); val.className = "barlist-val";
+      val.textContent = opts.fmt ? opts.fmt(r.value) : r.value;
+      row.append(lab, track, val); wrap.appendChild(row);
+    });
+    host.appendChild(wrap);
+  }
+
+  // Műfaji összefüggések — emotion×genre + topic×genre heatmaps, lexdiv bars.
+  (function () {
+    const a = DATA.associations || {};
+    const emoLabel = {anger: "harag", fear: "félelem", disgust: "undor", sadness: "szomorúság", joy: "öröm", none: "semleges"};
+    const matrix = block => block.rows.map(r => block.categories.map(c => r.shares[c]));
+    if (a.emotion && a.emotion.rows.length) {
+      heatmap("c-assoc-emotion", a.emotion.rows.map(r => r.genre),
+        a.emotion.categories.map(c => emoLabel[c] || c), matrix(a.emotion),
+        {rowLabel: "Műfaj", colLabel: "Érzelem", valLabel: "arány"});
+    } else empty("c-assoc-emotion", "Nincs adat — előbb az érzelem- és műfaj-elemzés.");
+    if (a.topic && a.topic.rows.length) {
+      heatmap("c-assoc-topic", a.topic.rows.map(r => r.genre), a.topic.categories, matrix(a.topic),
+        {rowLabel: "Műfaj", colLabel: "Téma", valLabel: "arány"});
+    } else empty("c-assoc-topic", "Nincs adat — előbb a téma- és műfaj-elemzés.");
+    if (a.lexdiv && a.lexdiv.rows.length) {
+      const rows = [...a.lexdiv.rows].sort((x, y) => y.mattr - x.mattr)
+        .map(r => ({label: r.genre, value: r.mattr}));
+      barList(document.getElementById("c-assoc-lexdiv"), rows, {fmt: v => v.toFixed(3), color: cssVar("--c4")});
+    } else empty("c-assoc-lexdiv", "Nincs adat.");
+  })();
+
+  // Rímek — rhyme density by decade + genre, type mix, scheme distribution.
+  (function () {
+    const r = DATA.rhyme || {};
+    const host = document.getElementById("c-rhyme");
+    if (!r.by_decade || !r.by_decade.length) {
+      empty("c-rhyme", "Nincs adat — előbb futtasd a rím-elemzést (python -m src.lyrics.rhyme run)."); return;
+    }
+    const pct = v => Math.round(v * 100) + "%";
+    const grid = document.createElement("div"); grid.className = "cols";
+    const dec = document.createElement("div");
+    dec.innerHTML = "<h3>Rímsűrűség évtizedenként</h3>";
+    barList(dec, r.by_decade.map(d => ({label: d.decade + "s", value: d.density})), {max: 1, fmt: pct});
+    const gen = document.createElement("div");
+    gen.innerHTML = "<h3>Rímsűrűség műfajonként</h3>";
+    const grows = Object.entries(r.by_genre || {}).filter(([, s]) => s.n >= 40)
+      .sort((x, y) => y[1].density - x[1].density).map(([g, s]) => ({label: g, value: s.density}));
+    barList(gen, grows, {max: 1, fmt: pct, color: cssVar("--c4")});
+    grid.append(dec, gen); host.appendChild(grid);
+
+    const t = (r.overall && r.overall.types) || {};
+    const tdiv = document.createElement("div");
+    tdiv.innerHTML = "<h3>Rímtípusok</h3><p class=\"metric-cap\">A rímpárok megoszlása; a ragrím (toldalék-rím) az asszonáncon/tisztán belüli „könnyű” rím.</p>";
+    barList(tdiv, [
+      {label: "asszonánc", value: t["asszonánc"] || 0},
+      {label: "tiszta rím", value: t["tiszta"] || 0},
+      {label: "ebből ragrím", value: t["ragrím"] || 0},
+    ], {max: 1, fmt: pct, color: cssVar("--c6")});
+    host.appendChild(tdiv);
+
+    const sdiv = document.createElement("div");
+    sdiv.innerHTML = "<h3>Gyakori rímképletek (négysoros strófák)</h3>";
+    const schemes = r.schemes || [];
+    const maxS = schemes.length ? schemes[0][1] : 1;
+    barList(sdiv, schemes.map(([sc, c]) => ({label: sc, value: c})),
+      {max: maxS, fmt: v => v.toLocaleString("hu"), color: cssVar("--c8")});
+    host.appendChild(sdiv);
+  })();
 })();
 </script>
 </body>

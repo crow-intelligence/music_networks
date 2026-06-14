@@ -37,6 +37,7 @@ DEFAULT_NETWORKS_DIR = Path("data/processed/networks")
 DEFAULT_EMOTION_DIR = Path("data/processed/emotion")
 DEFAULT_GENRE_DIR = Path("data/processed/genre")
 DEFAULT_COLLAB_DIR = Path("data/processed/collab")
+DEFAULT_RHYME_DIR = Path("data/processed/rhyme")
 _TEMPLATE = Path(__file__).with_name("template.html")
 _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
@@ -184,6 +185,8 @@ def assemble_data(
     emotion: dict[str, Any] | None = None,
     genre: dict[str, Any] | None = None,
     collab: dict[str, Any] | None = None,
+    rhyme: dict[str, Any] | None = None,
+    associations: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -200,6 +203,8 @@ def assemble_data(
         emotion: The aggregated emotion blocks (may be empty/``None``).
         genre: The aggregated genre blocks (may be empty/``None``).
         collab: The collaboration-network blocks (may be empty/``None``).
+        rhyme: The rhyme-analysis blocks (may be empty/``None``).
+        associations: The genre association cross-tabs (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -228,6 +233,8 @@ def assemble_data(
         "emotion": emotion or {},
         "genre": genre or {},
         "collab": collab or {},
+        "rhyme": rhyme or {},
+        "associations": associations or {},
     }
 
 
@@ -452,6 +459,87 @@ def load_collab(collab_dir: Path) -> dict[str, Any]:
     return {"alpha": summary.get("alpha"), "slices": kept}
 
 
+def load_rhyme(rhyme_dir: Path) -> dict[str, Any]:
+    """Load the rhyme-analysis summary, scoped to :data:`MIN_DECADE`+.
+
+    Args:
+        rhyme_dir: Directory with ``rhyme.json`` (see
+            :func:`src.lyrics.rhyme.build_artifacts`).
+
+    Returns:
+        ``{}`` if absent, else the aggregate with per-decade rows below
+        :data:`MIN_DECADE` dropped.
+    """
+    agg = _load_json(rhyme_dir / "rhyme.json", {})
+    if not agg:
+        return {}
+    agg["by_decade"] = [
+        d for d in agg.get("by_decade", []) if d["decade"] >= MIN_DECADE
+    ]
+    return agg
+
+
+def load_associations(
+    docs: list[Any],
+    *,
+    emotion_dir: Path,
+    genre_dir: Path,
+    topics_dir: Path,
+) -> dict[str, Any]:
+    """Build the genre association cross-tabs (emotion / topic / lexical div).
+
+    Args:
+        docs: The loaded corpus (for the lexical-diversity-by-genre view).
+        emotion_dir: Emotion artifacts dir.
+        genre_dir: Genre artifacts dir.
+        topics_dir: Topic artifacts dir (``assignments.json`` + ``topic_info``).
+
+    Returns:
+        ``{"emotion", "lexdiv", "topic"}`` blocks (each present only when its
+        inputs exist); ``{}`` if there are no genre tags.
+    """
+    from src.lyrics.associations import (
+        category_by_genre,
+        load_emotion_labels,
+        load_genre_map,
+        mattr_by_genre,
+    )
+    from src.lyrics.emotion import EMOTIONS
+
+    genre_of = load_genre_map(genre_dir)
+    if not genre_of:
+        return {}
+    out: dict[str, Any] = {}
+
+    emotion_labels = load_emotion_labels(emotion_dir)
+    if emotion_labels:
+        out["emotion"] = category_by_genre(emotion_labels, genre_of, list(EMOTIONS))
+
+    if docs:
+        out["lexdiv"] = mattr_by_genre({d.song_id: d.tokens for d in docs}, genre_of)
+
+    assignments = _load_json(topics_dir / "assignments.json", {})
+    topic_info = _load_json(topics_dir / "topic_info.json", [])
+    if assignments and topic_info:
+        name_of = {
+            t["topic_id"]: t["name"] for t in topic_info if t.get("topic_id") != -1
+        }
+        # Categories = the largest topics (a 9×N heatmap stays readable).
+        ranked = sorted(
+            (t for t in topic_info if t.get("topic_id") != -1),
+            key=lambda t: t.get("size", 0),
+            reverse=True,
+        )
+        cats = [t["name"] for t in ranked[:14]]
+        topic_label = {
+            int(sid): name_of[tid]
+            for sid, tid in assignments.items()
+            if int(tid) in name_of
+        }
+        out["topic"] = category_by_genre(topic_label, genre_of, cats)
+    return out
+
+
 def build(
     *,
     db_path: str = "data/music.db",
@@ -462,6 +550,7 @@ def build(
     emotion_dir: Path | str = DEFAULT_EMOTION_DIR,
     genre_dir: Path | str = DEFAULT_GENRE_DIR,
     collab_dir: Path | str = DEFAULT_COLLAB_DIR,
+    rhyme_dir: Path | str = DEFAULT_RHYME_DIR,
     out_path: Path | str = DEFAULT_OUT,
 ) -> Path:
     """Build the dashboard HTML from all cached artifacts.
@@ -475,6 +564,7 @@ def build(
         emotion_dir: Emotion artifacts dir (``emotion.json``).
         genre_dir: Genre artifacts dir (``genre.json``).
         collab_dir: Collaboration-network artifacts dir (``summary.json``).
+        rhyme_dir: Rhyme-analysis artifacts dir (``rhyme.json``).
         out_path: Output HTML path.
 
     Returns:
@@ -529,6 +619,13 @@ def build(
     emotion = load_emotion(Path(emotion_dir))
     genre = load_genre(Path(genre_dir))
     collab = load_collab(Path(collab_dir))
+    rhyme = load_rhyme(Path(rhyme_dir))
+    associations = load_associations(
+        docs,
+        emotion_dir=Path(emotion_dir),
+        genre_dir=Path(genre_dir),
+        topics_dir=topics_dir,
+    )
 
     data = assemble_data(
         overview=overview,
@@ -541,6 +638,8 @@ def build(
         emotion=emotion,
         genre=genre,
         collab=collab,
+        rhyme=rhyme,
+        associations=associations,
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

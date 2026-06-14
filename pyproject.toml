@@ -145,6 +145,8 @@ testpaths = [
     "src/lyrics/networks.py",
     "src/lyrics/diversity.py",
     "src/lyrics/emotion.py",
+    "src/lyrics/rhyme.py",
+    "src/lyrics/associations.py",
     "src/enrich/genre.py",
     "src/graphs/collab.py",
     "src/dashboard/build.py",
