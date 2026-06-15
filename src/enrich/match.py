@@ -67,6 +67,36 @@ def normalize(text: str) -> str:
     return _WHITESPACE.sub(" ", no_punct).strip()
 
 
+def prettify_name(name: str) -> str:
+    """Title-case an all-lowercase credit string; leave styled names alone.
+
+    Many scraped credit strings (songwriter names, some performer names) are
+    stored entirely lowercase. Only such *fully lowercase* names are title-cased
+    (so ``orbán tamás`` becomes ``Orbán Tamás``), while intentional stylings
+    (``DESH``, ``Tankcsapda``, ``LGT``) are left untouched. Accents are
+    preserved; only the first letter of each whitespace-separated token is cased.
+
+    Args:
+        name: A credit string.
+
+    Returns:
+        The display name.
+
+    Examples:
+        >>> prettify_name("orbán tamás")
+        'Orbán Tamás'
+        >>> prettify_name("s. nagy istván")
+        'S. Nagy István'
+        >>> prettify_name("DESH")
+        'DESH'
+        >>> prettify_name("Tankcsapda")
+        'Tankcsapda'
+    """
+    if name and name == name.lower():
+        return " ".join(w[:1].upper() + w[1:] for w in name.split(" ") if w)
+    return name
+
+
 def song_key(artist: str, title: str) -> str:
     """Build a normalized ``artist|title`` matching key.
 

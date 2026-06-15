@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from src.enrich.match import normalize
+from src.enrich.match import normalize, prettify_name
 from src.utils import year_to_decade
 
 # Performer credit strings that are category buckets, not acts — kept out of the
@@ -38,35 +38,6 @@ _CHART_JUNK = frozenset(
         "egyéb szövegek",
     )
 )
-
-
-def prettify_name(name: str) -> str:
-    """Title-case an all-lowercase credit string; leave styled names alone.
-
-    Scraped performer names are inconsistently cased. Only names that are
-    *entirely* lowercase are title-cased (so ``halász judit`` becomes
-    ``Halász Judit``), while intentional stylings (``DESH``, ``Tankcsapda``,
-    ``LGT``) are left untouched.
-
-    Args:
-        name: A credit string.
-
-    Returns:
-        The display name.
-
-    Examples:
-        >>> prettify_name("halász judit")
-        'Halász Judit'
-        >>> prettify_name("ismerős arcok")
-        'Ismerős Arcok'
-        >>> prettify_name("DESH")
-        'DESH'
-        >>> prettify_name("Tankcsapda")
-        'Tankcsapda'
-    """
-    if name and name == name.lower():
-        return " ".join(w[:1].upper() + w[1:] for w in name.split(" ") if w)
-    return name
 
 
 # Lowercase connector words when title-casing an all-caps chart credit.

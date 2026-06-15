@@ -27,7 +27,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.enrich.match import normalize
+from src.enrich.match import normalize, prettify_name
 from src.lyrics.stats import AUTHORITATIVE_SOURCES, song_decade
 
 if TYPE_CHECKING:
@@ -228,7 +228,9 @@ def load_song_creators(
     Returns:
         ``(creators, decade, display)`` where ``creators[song_id]`` is the set of
         normalized creator keys, ``decade[song_id]`` is the release decade or
-        ``None``, and ``display[key]`` is a representative original spelling.
+        ``None``, and ``display[key]`` is a representative spelling, title-cased
+        for display (the DB stores credits lowercase) via
+        :func:`~src.enrich.match.prettify_name`.
     """
     from src.db import (
         Author,
@@ -284,7 +286,8 @@ def load_song_creators(
         engine.dispose()
 
     display = {
-        key: counts.most_common(1)[0][0] for key, counts in display_counts.items()
+        key: prettify_name(counts.most_common(1)[0][0])
+        for key, counts in display_counts.items()
     }
     return creators, decade, display
 
