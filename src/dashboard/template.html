@@ -240,23 +240,21 @@
 <body>
 <a class="skip" href="#main">Ugrás a tartalomra</a>
 <header>
-  <h1>Magyar dalszövegek hálózata</h1>
+  <h1>Neked írom a dalt — neked ki is elemzem</h1>
   <p class="subtitle">Diakronikus elemzés évtizedekre bontva</p>
-  <p class="lead">Témák, megkülönböztető szavak és jelentésváltozás a magyar
-    popzene dalszövegeiben — kizárólag aggregált mutatók (teljes szöveg sosem).</p>
+  <p class="lead">Kik, miről írnak és énekelnek, énekeltek nekünk a magyar
+    könnyűzene születése óta.</p>
 </header>
 <nav class="chapterbar" aria-label="Fejezetek">
   <div class="chapterbar-track" id="chapterbar-track"></div>
 </nav>
 
 <main id="main">
-<section id="overview"><h2>Adatok évtizedenként</h2>
-  <p class="note">Dalok, előadók, szövegírók és zeneszerzők száma. A <span class="flag">★</span>
-    az alacsony elemszámú (statisztikailag bizonytalan) évtizedeket jelöli.</p>
+<section id="overview"><h2>Adatok</h2>
   <div id="c-overview"></div>
 </section>
 
-<section id="keyness"><h2>Gyakori és megkülönböztető szavak</h2>
+<section id="keyness"><h2>Adott évtizedre jellemző leggyakoribb és legjellemzőbb szavak</h2>
   <p class="note">Válassz évtizedet a legördülő menüből. Bal oldalon az adott évtized
     <strong>leggyakoribb</strong> tartalmas szavai (a betűméret a gyakoriságot kódolja),
     jobb oldalon a <strong>megkülönböztető</strong> szavak — amelyek az évtizedben a
@@ -280,10 +278,7 @@
 
 <section id="genre"><h2>Műfajok évtizedenként</h2>
   <p class="note">A dalok műfaji összetétele a <strong>Discogs</strong>-kiadások
-    alapján (a leggyakoribb műfaj az előadó+cím egyezésű kiadásokból). Minden oszlop
-    100%-ra normált; az „Összes” oszlop a teljes (1950+) korpusz aggregátuma. Az
-    <em>n</em> a műfajjal címkézett dalok száma — a lefedettség évtizedenként eltér,
-    ezért a kis mintájú (<span class="flag">★</span>) évtizedeket óvatosan kezeld.</p>
+    alapján.</p>
   <div id="c-genre"></div>
 </section>
 
@@ -302,21 +297,23 @@
   <div id="c-emotion"></div>
 </section>
 
-<section id="associations"><h2>Műfaji összefüggések</h2>
-  <p class="note">Mi jár együtt mely műfajjal? A műfaji címkék a <strong>Discogs</strong>
-    kiadásokból származnak, így csak a címkézett részhalmazon értelmezhetők.</p>
-  <h3>Érzelem × műfaj</h3>
+<section id="assoc-emotion"><h2>Érzelem × műfaj</h2>
   <p class="note">Az egyes műfajok dalainak domináns-érzelem megoszlása (soronként
-    100%). A „félelem” modell-torzítás miatt tág (ld. §Érzelmek), de a műfajok
-    közötti különbségek beszédesek — pl. a hiphop kiugróan haragos.</p>
+    100%) — pl. a hiphop kiugróan haragos. A műfaji címkék a <strong>Discogs</strong>
+    kiadásokból származnak, így csak a címkézett dalokra értelmezhetők.</p>
   <div id="c-assoc-emotion"></div>
-  <h3>Téma × műfaj</h3>
+</section>
+
+<section id="assoc-topic"><h2>Téma × műfaj</h2>
   <p class="note">Mely témák dominálnak az egyes műfajokban (a műfaj dalainak
-    téma-megoszlása a legnagyobb témákra).</p>
+    téma-megoszlása a legnagyobb témákra). A műfaji címkék a Discogs-kiadásokból
+    származnak.</p>
   <div id="c-assoc-topic"></div>
-  <h3>Lexikai változatosság műfajonként</h3>
-  <p class="note">MATTR (mozgóablakos típus–token arány) műfajonként — magasabb =
-    változatosabb szókincs.</p>
+</section>
+
+<section id="assoc-lexdiv"><h2>Lexikai változatosság műfajonként</h2>
+  <p class="note">A szókincs változatossága műfajonként — magasabb érték =
+    változatosabb szókincs. A műfaji címkék a Discogs-kiadásokból származnak.</p>
   <div id="c-assoc-lexdiv"></div>
 </section>
 
@@ -366,10 +363,8 @@
 </section>
 
 <section id="stats"><h2>Szókincs- és modell-statisztika</h2>
-  <p class="note">Évtizedenkénti szókincsméret és lexikai változatosság. A lexikai
-    változatosság <strong>MATTR</strong> (100 szavas mozgóablakos típus–token arány):
-    mekkora arányban különböznek a szavak egy 100 szavas szakaszon belül — a
-    szöveghossztól független mérőszám (0–1, a magasabb változatosabb).</p>
+  <p class="note">A lexikai változatosság azt méri, hogy ki mennyire változatos
+    szókincssel bír. Minél magasabb az érték, annál nagyobb a változatosság.</p>
   <div id="c-vocab"></div>
 </section>
 
@@ -833,11 +828,14 @@ function heatmap(id, rows, cols, values, opts = {}) {
 }
 
 // Horizontal gradient scale legend for the heatmap.
+let _heatLegendSeq = 0;
 function heatLegend(host, vMax, valLabel) {
   const W = 280, H = 46, barW = 220, barH = 12, x0 = 8;
   const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Színskála: ${valLabel}, 0-tól ${vMax.toFixed(2)}-ig.`});
   svg.setAttribute("style", "max-width:280px;margin-top:8px");
-  const defs = s("defs"); const gid = "heatgrad";
+  // Unique id per legend — multiple heatmaps live on the page (some in hidden
+  // chapters), and a shared id makes the fill reference the wrong gradient.
+  const defs = s("defs"); const gid = "heatgrad-" + (++_heatLegendSeq);
   const grad = s("linearGradient", {id: gid, x1: "0", y1: "0", x2: "1", y2: "0"});
   grad.appendChild(s("stop", {offset: "0%", "stop-color": HEAT_MIN}));
   grad.appendChild(s("stop", {offset: "100%", "stop-color": HEAT_MAX}));
@@ -1189,7 +1187,7 @@ function egoSVG(graph, seed, count) {
 
   // Vocab + lexical diversity
   if (u.vocab_stats && u.vocab_stats.length) {
-    table("c-vocab", ["Évtized", "Szókincs", "Lexikai változatosság (MATTR)", "Dalok"],
+    table("c-vocab", ["Évtized", "Szókincs", "Lexikai változatosság", "Dalok száma"],
       u.vocab_stats.map(v => [v.decade + "s", v.vocab_size,
         v.lexdiv != null ? v.lexdiv.toFixed(3) : "—", v.n_songs]));
   } else empty("c-vocab", "Nincs adat — előbb futtasd a usage_change elemzést.");
@@ -1485,10 +1483,10 @@ function egoSVG(graph, seed, count) {
 //      sticky chapter bar, prev/next + progress, URL hash and arrow keys. ----
 (function () {
   const CHAPTERS = [
-    {id: "attekintes", title: "Áttekintés", sections: ["overview", "stats"]},
-    {id: "szavak", title: "Szavak", sections: ["keyness"]},
-    {id: "temak", title: "Témák", sections: ["topics"]},
-    {id: "mufaj-erzelem", title: "Műfaj & érzelem", sections: ["genre", "emotion", "associations"]},
+    {id: "attekintes", title: "Áttekintés", sections: ["overview", "genre"]},
+    {id: "szavak", title: "Szavak", sections: ["keyness", "stats", "assoc-lexdiv"]},
+    {id: "temak", title: "Témák", sections: ["topics", "assoc-topic"]},
+    {id: "mufaj-erzelem", title: "Műfaj & érzelem", sections: ["emotion", "assoc-emotion"]},
     {id: "rimek", title: "Rímek", sections: ["rhyme"]},
     {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "heatmap", "drift", "neighbors"]},
     {id: "halozat", title: "Alkotói hálózat", sections: ["collab"]},
