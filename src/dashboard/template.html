@@ -207,6 +207,18 @@
   /* Charts live in a contained scroll region so they never break page layout. */
   .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .wide-chart { width: 100%; }
+  /* ---- navigable chapters ---- */
+  /* Only the active chapter's sections are shown; JS toggles display. */
+  main > section { display: none; }
+  .chapterbar { position: sticky; top: 0; z-index: 40; background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+  .chapterbar-track { max-width: 1040px; margin: 0 auto; padding: 7px 24px; display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .chapterbar button { font: inherit; font-size: 0.8rem; white-space: nowrap; padding: 6px 11px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; min-height: 34px; }
+  .chapterbar button:hover { color: var(--ink); background: var(--card-bg); }
+  .chapterbar button.active { background: var(--accent); color: var(--paper); }
+  .chapterbar button .chnum { opacity: 0.6; margin-right: 5px; }
+  .chapterbar button.active .chnum { opacity: 0.85; }
+  .chapter-controls { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); margin: var(--sp-6) 0 0; padding-top: var(--sp-2); border-top: 1px solid var(--line); }
+  .chapter-controls .progress { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
   /* ---- responsive ---- */
   @media (max-width: 640px) {
     :root { --fs-h1: 2rem; --fs-h2: 1.4rem; --fs-h3: 1.05rem; }
@@ -232,23 +244,10 @@
   <p class="subtitle">Diakronikus elemzés évtizedekre bontva</p>
   <p class="lead">Témák, megkülönböztető szavak és jelentésváltozás a magyar
     popzene dalszövegeiben — kizárólag aggregált mutatók (teljes szöveg sosem).</p>
-  <nav aria-label="Szakaszok">
-    <a href="#overview">Adatok</a>
-    <a href="#keyness">Gyakori / jellemző szavak</a>
-    <a href="#topics">Témák az időben</a>
-    <a href="#genre">Műfajok</a>
-    <a href="#emotion">Érzelmek</a>
-    <a href="#associations">Műfaji összefüggések</a>
-    <a href="#rhyme">Rímek</a>
-    <a href="#change">Jelentésváltozás</a>
-    <a href="#heatmap">Eltérés-hőtérkép</a>
-    <a href="#drift">Kumulatív sodródás</a>
-    <a href="#neighbors">Szomszédos szavak</a>
-    <a href="#collab">Alkotói hálózat</a>
-    <a href="#stats">Modell-statisztika</a>
-    <a href="#method">Módszertan</a>
-  </nav>
 </header>
+<nav class="chapterbar" aria-label="Fejezetek">
+  <div class="chapterbar-track" id="chapterbar-track"></div>
+</nav>
 
 <main id="main">
 <section id="overview"><h2>Adatok évtizedenként</h2>
@@ -410,6 +409,11 @@
     HuMus Project: Corpus Compilation and Multi-experiment Study of Hungarian
     Popular Music Lyrics</em></a>, Acta Universitatis Sapientiae, Informatica (2026).</p>
 </section>
+<div id="chapterctl" class="chapter-controls">
+  <button class="btn" id="prevch" type="button">← Előző</button>
+  <span class="progress" id="chprogress" aria-live="polite"></span>
+  <button class="btn" id="nextch" type="button">Következő →</button>
+</div>
 </main>
 
 <footer>Crow Intelligence · music_networks · statikus dashboard (inline SVG, nincs külső függőség)</footer>
@@ -1475,6 +1479,74 @@ function egoSVG(graph, seed, count) {
       {max: maxS, fmt: v => v.toLocaleString("hu"), color: cssVar("--c8")});
     host.appendChild(sdiv);
   })();
+})();
+
+// ---- Navigable chapters: group the sections, show one at a time, with a
+//      sticky chapter bar, prev/next + progress, URL hash and arrow keys. ----
+(function () {
+  const CHAPTERS = [
+    {id: "attekintes", title: "Áttekintés", sections: ["overview", "stats"]},
+    {id: "szavak", title: "Szavak", sections: ["keyness"]},
+    {id: "temak", title: "Témák", sections: ["topics"]},
+    {id: "mufaj-erzelem", title: "Műfaj & érzelem", sections: ["genre", "emotion", "associations"]},
+    {id: "rimek", title: "Rímek", sections: ["rhyme"]},
+    {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "heatmap", "drift", "neighbors"]},
+    {id: "halozat", title: "Alkotói hálózat", sections: ["collab"]},
+    {id: "modszertan", title: "Módszertan", sections: ["method"]},
+  ];
+  const track = document.getElementById("chapterbar-track");
+  const sections = [...document.querySelectorAll("main > section")];
+  const prevBtn = document.getElementById("prevch");
+  const nextBtn = document.getElementById("nextch");
+  const progress = document.getElementById("chprogress");
+  const secToCh = {};
+  CHAPTERS.forEach((c, i) => c.sections.forEach(s => { secToCh[s] = i; }));
+
+  const buttons = CHAPTERS.map((c, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = `<span class="chnum">${i + 1}</span>${c.title}`;
+    b.setAttribute("aria-label", `${i + 1}. fejezet: ${c.title}`);
+    b.addEventListener("click", () => show(i, true));
+    track.appendChild(b);
+    return b;
+  });
+
+  let cur = -1;
+  function show(i, user) {
+    i = Math.max(0, Math.min(CHAPTERS.length - 1, i));
+    if (i === cur) return;
+    cur = i;
+    const active = new Set(CHAPTERS[i].sections);
+    // Explicit "block" — an empty string would fall back to the CSS rule that
+    // hides every section by default.
+    sections.forEach(s => { s.style.display = active.has(s.id) ? "block" : "none"; });
+    buttons.forEach((b, j) => {
+      b.classList.toggle("active", j === i);
+      b.setAttribute("aria-current", j === i ? "true" : "false");
+    });
+    progress.textContent = `${i + 1} / ${CHAPTERS.length}`;
+    prevBtn.disabled = i === 0;
+    nextBtn.disabled = i === CHAPTERS.length - 1;
+    history.replaceState(null, "", "#" + CHAPTERS[i].id);
+    buttons[i].scrollIntoView({inline: "center", block: "nearest"});
+    if (user) window.scrollTo({top: 0, behavior: "smooth"});
+  }
+  function fromHash() {
+    const h = (location.hash || "").replace("#", "");
+    const byId = CHAPTERS.findIndex(c => c.id === h);
+    if (byId >= 0) return byId;
+    return h in secToCh ? secToCh[h] : 0;
+  }
+  prevBtn.addEventListener("click", () => show(cur - 1, true));
+  nextBtn.addEventListener("click", () => show(cur + 1, true));
+  document.addEventListener("keydown", e => {
+    if (e.target.closest("input, select, textarea")) return;
+    if (e.key === "ArrowLeft") show(cur - 1, true);
+    else if (e.key === "ArrowRight") show(cur + 1, true);
+  });
+  window.addEventListener("hashchange", () => show(fromHash(), false));
+  show(fromHash(), false);
 })();
 </script>
 </body>
