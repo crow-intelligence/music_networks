@@ -149,14 +149,22 @@
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-2); }
   .card { border: 1px solid var(--line); padding: var(--sp-2) 14px; background: var(--card-bg); }
   .card .tname { font-family: "IM Fell English", Georgia, serif; font-size: 1.1rem; color: var(--ink); }
-  .card .kw { color: var(--muted); font-size: 0.85rem; }
+  .card .kw { color: var(--body); font-size: 0.9rem; margin-top: 4px; }
+  .card .card-n { color: var(--muted); font-size: 0.78rem; margin-top: 8px; }
   .legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 14px; margin: var(--sp-1) 0; font-size: 0.85rem; }
   .legend span { cursor: pointer; user-select: none; padding: 3px 6px; border: 1px solid transparent; min-height: 28px; display: inline-flex; align-items: center; }
   .legend span.off { opacity: 0.4; text-decoration: line-through; }
   .legend .sw { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: middle; flex: 0 0 auto; }
+  .legend .sw-line { margin-right: 6px; vertical-align: middle; flex: 0 0 auto; }
   .cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-3); }
+  /* §Overview small multiples (2×2) + side-by-side "X by decade / by stílus" pairs. */
+  .overview-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-3); }
+  .pair-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: start; }
+  .pair-grid h3 { margin: 0 0 2px; }
+  .mini-title { font-family: "IM Fell English", Georgia, serif; font-size: 1.05rem; color: var(--ink); margin: 0 0 2px; }
   .pill { display: inline-block; font-size: 0.75rem; border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
   /* §2 word clouds — frequency + distinctive, side by side for one decade */
+  #keyness > .note { max-width: none; }
   .cloud-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--sp-3); align-items: start; }
   .cloud-fig { margin: 0; }
   .cloud-img { width: 100%; height: auto; border: 1px solid var(--line); background: var(--card-bg); border-radius: 3px; }
@@ -168,6 +176,18 @@
   .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-3); align-items: start; }
   .metric-grid h3 { margin: 0 0 2px; }
   .metric-cap { color: var(--muted); font-size: 0.78rem; font-style: italic; margin: 0 0 var(--sp-1); }
+  /* §Rímek — type definitions + real, attributed examples */
+  .rhyme-types { margin: var(--sp-1) 0 var(--sp-3); }
+  .rhyme-type { margin: 6px 0; max-width: var(--measure); }
+  .rhyme-type .rex { color: var(--body); }
+  .rattr { color: var(--muted); font-size: 0.8rem; }
+  .rattr a { color: var(--muted); }
+  .rhyme-schemes-ex { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-2); }
+  .rscheme { border: 1px solid var(--line); border-radius: 4px; padding: var(--sp-2) 14px; background: var(--card-bg); }
+  .rscheme-pat { font-family: "Courier Prime", monospace; font-weight: 700; letter-spacing: 3px; color: var(--muted); margin-bottom: 6px; }
+  .rscheme-lines { font-size: 0.9rem; line-height: 1.55; }
+  .rscheme .rattr { margin-top: 8px; display: block; }
+  .tip-credit { opacity: 0.72; font-style: italic; }
   .rank-scroll { max-height: 430px; overflow-y: auto; border: 1px solid var(--line); border-radius: 3px; }
   .metric-list { margin: 0; padding: 4px 4px 4px 2.4em; font-size: 0.9rem; list-style: decimal; }
   .metric-list li { margin: 1px 0; padding-right: 6px; }
@@ -238,7 +258,7 @@
     header { padding-top: var(--sp-5); }
     nav { line-height: 2.4; }
     nav a { display: inline-block; }
-    .cols, .cards, .cloud-pair { grid-template-columns: 1fr; }
+    .cols, .cards, .cloud-pair, .overview-grid, .pair-grid { grid-template-columns: 1fr; }
     .rank, .ego-list { columns: 1; }
     .controls { gap: var(--sp-1) var(--sp-2); }
     /* Keep chart text legible: don't shrink the whole SVG below a readable
@@ -265,7 +285,6 @@
 </nav>
 <header>
   <h1>Neked írom a dalt — neked ki is elemzem</h1>
-  <p class="subtitle">Diakronikus elemzés évtizedekre bontva</p>
   <p class="lead">Kik, miről írnak és énekelnek, énekeltek nekünk a magyar
     könnyűzene születése óta.</p>
 </header>
@@ -274,79 +293,75 @@
 </nav>
 
 <main id="main">
-<section id="overview"><h2>Adatok</h2>
-  <div id="c-overview"></div>
+<section id="overview"><h2>A korpusz évtizedenként</h2>
+  <p class="note">Dalok, előadók, szövegírók és zeneszerzők száma évtizedenként.</p>
+  <div id="c-overview" class="overview-grid"></div>
 </section>
 
 <section id="keyness"><h2>Adott évtizedre jellemző leggyakoribb és legjellemzőbb szavak</h2>
-  <p class="note">Válassz évtizedet a legördülő menüből. Bal oldalon az adott évtized
-    <strong>leggyakoribb</strong> tartalmas szavai (a betűméret a gyakoriságot kódolja),
-    jobb oldalon a <strong>megkülönböztető</strong> szavak — amelyek az évtizedben a
-    többihez képest felülreprezentáltak (betűméret = G² megkülönböztető-erő, log-ratio
-    &gt; 0). Mindkét felhő átváltható rangsorolt listára.</p>
+  <p class="note">Válassz évtizedet a legördülő menüből. Bal oldalon az adott
+    évtized top 40 leggyakoribb tartalmas szava látható, jobb oldalon a top 40
+    legkiemelkedőbb szó. Egy szót akkor tekintünk kiemelkedőnek, ha a többi
+    évtizedhez képest felülreprezentált. A betűméret a gyakoriságot, illetve a
+    kiemelkedőséget kódolja. Mindkét felhő átváltható rangsorolt listára.</p>
   <div id="c-keyness-controls" class="controls"></div>
   <div id="c-keyness" class="cloud-pair"></div>
 </section>
 
-<section id="topics"><h2>Témák az időben</h2>
-  <p class="note">BERTopic témák évtizedenként — válts a dalok darabszáma és az
-    évtizeden belüli arány között. A jelmagyarázatra kattintva ki-/bekapcsolhatók
-    a görbék.</p>
+<section id="lexdiv"><h2>A szókincs változatossága</h2>
+  <p class="note">Minél magasabb az érték, annál változatosabb a szókincs — minél
+    többször ismétlődik ugyanaz a szó, annál alacsonyabb (MATTR-mérőszám). Balra
+    évtizedenként, jobbra zenei stílusonként (a Discogs-kiadások alapján).</p>
+  <div class="pair-grid">
+    <div><h3>Évtizedenként</h3><div id="c-lexdiv-decade"></div></div>
+    <div><h3>Zenei stílusonként</h3><div id="c-lexdiv-genre"></div></div>
+  </div>
+</section>
+
+<section id="topics"><h2>A dalok témái évtizedenként</h2>
+  <p class="note">Miről szólnak a dalok? Végigkövethetjük egy adott téma
+    népszerűségét az 1950-es évektől napjainkig. A grafikon évtizedenként
+    megmutatja a leggyakoribb témák eloszlását a korszak dalaiban. A
+    jelmagyarázatra kattintva ki-be kapcsolhatók a görbék, illetve változtatható a
+    darabszám vagy az arány nézet.</p>
   <div id="c-topics-metric" class="controls"></div>
   <div id="c-topics-legend" class="legend"></div>
   <div id="c-topics"></div>
-  <h3>Témakártyák</h3>
+  <h3>Domináns szavak témánként</h3>
+  <p class="note">A top 10 leggyakoribb jelentésteli szó, amely az adott témához
+    tartozó dalokban a legtöbbször előfordul. A legördülő menüben lehet
+    kiválasztani a témát.</p>
   <div id="c-topic-controls" class="controls"></div>
   <div id="c-topic-cards"></div>
 </section>
 
-<section id="genre"><h2>Műfajok évtizedenként</h2>
-  <p class="note">A dalok műfaji összetétele a <strong>Discogs</strong>-kiadások
-    alapján.</p>
+<section id="genre"><h2>A dalok zenei stílusa évtizedenként, a Discogs-kiadások alapján</h2>
+  <p class="note">A dalok zenei stílusa a Discogs-kiadások alapján. Az „Egyéb” a
+    kisebb stílusokat vonja össze (jazz, gyerekdal, funk/soul, latin, blues,
+    reggae, klasszikus és társaik).</p>
   <div id="c-genre"></div>
 </section>
 
-<section id="emotion"><h2>Érzelmek a dalszövegekben</h2>
-  <p class="note">A dalszövegek <strong>domináns érzelme</strong> az
-    <em>XLM-EMO</em> többnyelvű érzelem-osztályozóval (XLM-RoBERTa, magyar nyelvet
-    is tartalmazó tanítóanyag) — négy érzelem: <strong>harag, félelem, öröm,
-    szomorúság</strong>. Az oszlopok az adott évtized dalainak érzelmi megoszlását
-    mutatják (a domináns érzelem aránya), 100%-ra normálva; az „Összes” a teljes
-    korpusz aggregátuma.</p>
-  <p class="note"><strong>Értelmezési fenntartás:</strong> az automatikus
-    érzelemfelismerés költői szövegen közelítő — a négy érzelem kényszerített
-    választás (nincs „semleges”), és az árnyalt vagy ironikus dalszövegeket néha
-    félreérti. Az arányok tájékoztató jellegűek. (Egy korábbi, hírszövegre tanított
-    modellt lecseréltünk, mert az szinte sosem ismerte fel az örömöt.)</p>
-  <div id="c-emotion"></div>
+<section id="emotion-pair"><h2>Érzelmek a dalszövegekben</h2>
+  <p class="note">A négy alapérzelem (öröm, szomorúság, harag, félelem) megoszlása
+    a dalokban — balra évtizedenként, jobbra zenei stílusonként —, mindkettő
+    100%-ra normálva. Az osztályozó az <em>XLM-EMO</em> (XLM-RoBERTa).</p>
+  <div class="pair-grid">
+    <div><h3>Évtizedenként</h3><div id="c-emotion"></div></div>
+    <div><h3>Zenei stílusonként</h3><div id="c-assoc-emotion"></div></div>
+  </div>
 </section>
 
-<section id="assoc-emotion"><h2>Érzelem × műfaj</h2>
-  <p class="note">Az egyes műfajok dalainak domináns-érzelem megoszlása (soronként
-    100%) — pl. a hiphop kiugróan haragos. A műfaji címkék a <strong>Discogs</strong>
-    kiadásokból származnak, így csak a címkézett dalokra értelmezhetők.</p>
-  <div id="c-assoc-emotion"></div>
-</section>
-
-<section id="assoc-topic"><h2>Téma × műfaj</h2>
-  <p class="note">Mely témák dominálnak az egyes műfajokban (a műfaj dalainak
-    téma-megoszlása a legnagyobb témákra). A műfaji címkék a Discogs-kiadásokból
-    származnak.</p>
+<section id="assoc-topic"><h2>A dalok témái zenei stílusonként</h2>
+  <p class="note">Mely témák dominálnak az egyes zenei stílusokban? Itt
+    tanulmányozható, hogy az adott stílusba tartozó dalok milyen arányban szólnak
+    a leggyakoribb témákról. A stíluscímkék a Discogs-kiadásokból származnak.</p>
   <div id="c-assoc-topic"></div>
 </section>
 
-<section id="assoc-lexdiv"><h2>Lexikai változatosság műfajonként</h2>
-  <p class="note">A szókincs változatossága műfajonként — magasabb érték =
-    változatosabb szókincs. A műfaji címkék a Discogs-kiadásokból származnak.</p>
-  <div id="c-assoc-lexdiv"></div>
-</section>
-
 <section id="rhyme"><h2>Rímek</h2>
-  <p class="note">A rímelést a sorvégi szavakból elemezzük, magyar fonetikai
-    közelítéssel (a kétjegyű mássalhangzók és a magánhangzó-hosszúság kezelésével).
-    A <strong>rímsűrűség</strong> a tiszta rímben részt vevő sorok aránya; a magyar
-    dalszöveg erősen épít az <em>asszonáncra</em> (magánhangzó-rím), a
-    <em>ragrím</em> pedig a toldalékból fakadó „könnyű” rím.</p>
+  <p class="note">Rímelés alatt a sorvégi szavak összecsengését értjük. A
+    <strong>rímsűrűség</strong> a rímelő sorok arányát adja meg.</p>
   <div id="c-rhyme"></div>
 </section>
 
@@ -354,11 +369,6 @@
   <p class="note">Egy szó jelentés-eltérése (1 − igazított koszinusz-hasonlóság) évtized-átmenetenként.</p>
   <div id="c-change-legend" class="legend"></div>
   <div id="c-change"></div>
-</section>
-
-<section id="heatmap"><h2>Eltérés-hőtérkép</h2>
-  <p class="note">Szó × évtized-átmenet eltérés-intenzitás. Sötétebb = nagyobb változás.</p>
-  <div id="c-heatmap"></div>
 </section>
 
 <section id="drift"><h2>Kumulatív sodródás</h2>
@@ -404,12 +414,6 @@
   <div id="c-pop-era"></div>
 </section>
 
-<section id="stats"><h2>Szókincs- és modell-statisztika</h2>
-  <p class="note">A lexikai változatosság azt méri, hogy ki mennyire változatos
-    szókincssel bír. Minél magasabb az érték, annál nagyobb a változatosság.</p>
-  <div id="c-vocab"></div>
-</section>
-
 <section id="method"><h2>Módszertan</h2>
   <p>A dalszövegek elsősorban a <strong>zeneszoveg.hu</strong> oldalról származnak,
     kiegészítve egy Genius-alapú (Kaggle) magyar dalszöveg-gyűjteménnyel. A dalok
@@ -426,7 +430,7 @@
     A téma-elnevezéseket kézzel adtuk a kulcsszavak alapján.
     A jelentésváltozást a <em>chronowords</em> SVD-beágyazásai mérik, évtizedenként
     tanítva és Procrustes-igazítással összevetve.
-    A <strong>műfajokat</strong> a <em>Discogs</em> kiadás-adatbázisból nyerjük
+    A <strong>zenei stílusokat</strong> a <em>Discogs</em> kiadás-adatbázisból nyerjük
     (előadó+cím egyezésű kiadások leggyakoribb műfaja); a MusicBrainz műfaj-lefedettsége
     a magyar előadókra gyenge, a Discogsé viszont kiváló.
     Az <strong>érzelmeket</strong> a
@@ -469,6 +473,22 @@ const INK = cssVar("--ink", "#1a1a17");
 const PAPER = cssVar("--paper", "#f7f5ef");
 const SVGNS = "http://www.w3.org/2000/svg";
 
+// Hungarian labels for the Discogs musical styles (the dashboard says "stílus",
+// not "műfaj"). Keys are the exact English strings emitted in DATA; anything
+// unmapped (and the long tail folded into "Egyéb") falls back to its raw label.
+const GENRE_HU = {
+  "Rock": "Rock", "Pop": "Pop", "Electronic": "Elektronikus", "Hip Hop": "Hip-hop",
+  "Folk, World, & Country": "Folk/világ", "Jazz": "Jazz",
+  "Children's": "Gyerekdal", "Funk / Soul": "Funk/soul", "Latin": "Latin",
+  "Blues": "Blues", "Reggae": "Reggae", "Stage & Screen": "Színpad/film",
+  "Classical": "Klasszikus", "Non-Music": "Nem zenei", "Egyéb": "Egyéb",
+};
+const genreHu = g => GENRE_HU[g] || g;
+// Shared emotion label + color maps (reused by the by-decade and by-stílus charts).
+const EMO_HU = {anger: "harag", fear: "félelem", joy: "öröm", sadness: "szomorúság"};
+const EMO_COLOR = {anger: "#aa3333", fear: "#7d3c98", joy: "#caa53d", sadness: "#34568b"};
+const emoCats = labels => (labels || []).map(l => ({key: l, label: EMO_HU[l] || l, color: EMO_COLOR[l] || MUTED}));
+
 function s(tag, attrs={}, kids=[]) {
   const n = document.createElementNS(SVGNS, tag);
   for (const k in attrs) n.setAttribute(k, attrs[k]);
@@ -485,6 +505,55 @@ function niceMax(v) {
   if (v <= 0) return 1;
   const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
   return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10].find(s => s >= m - 1e-9) * p;
+}
+
+// Hungarian decade labels (vowel harmony, e.g. 1960 → "1960-as"). "Összes" and
+// any non-decade column label pass through their own labelFn instead.
+const DECADE_HU = {1950: "1950-es", 1960: "1960-as", 1970: "1970-es", 1980: "1980-as",
+  1990: "1990-es", 2000: "2000-es", 2010: "2010-es", 2020: "2020-as"};
+const decadeLabel = d => DECADE_HU[+d] || (d + "");
+
+// Fold a {key: fraction} share-map down to a visible key set, summing every
+// other key into `otherLabel`. Used by the genre + topic stacked bars.
+function bucketShare(share, visibleKeys, otherLabel) {
+  const out = {}; let other = 0;
+  for (const k in share) { if (visibleKeys.includes(k)) out[k] = share[k]; else other += share[k]; }
+  if (other > 0) out[otherLabel] = other;
+  return out;
+}
+
+// ---- distinct fills for many categories (e.g. all 29 topics) ----
+// Each category gets a stable color × texture identity: 8 palette colors × 4
+// texture variants (solid / diagonal stripes / dots / crosshatch) = 32 distinct
+// fills. Used by the textured stacked bars (and its matching legend swatches).
+function catStyle(i) {
+  return {color: PALETTE[i % PALETTE.length], variant: Math.floor(i / PALETTE.length) % 4};
+}
+// Line-chart counterpart of the fill patterns: each texture variant → a dash
+// style, so a topic keeps one identity (same color; pattern on bars, dash on
+// lines). 0 solid · 1 dashed · 2 dotted · 3 dash-dot.
+const DASH_VARIANTS = ["", "7 5", "1.5 5", "9 4 1.5 4"];
+// An SVG <pattern> (6×6) — solid color base + a PAPER-ink texture overlay.
+function makePattern(id, color, variant) {
+  const pat = s("pattern", {id, patternUnits: "userSpaceOnUse", width: 6, height: 6});
+  pat.appendChild(s("rect", {x: 0, y: 0, width: 6, height: 6, fill: color}));
+  if (variant === 1) {  // diagonal stripes
+    [["M0 6 L6 0"], ["M-1 1 L1 -1"], ["M5 7 L7 5"]].forEach(([d]) =>
+      pat.appendChild(s("path", {d, stroke: PAPER, "stroke-width": 1.4})));
+  } else if (variant === 2) {  // dots
+    pat.appendChild(s("circle", {cx: 3, cy: 3, r: 1.3, fill: PAPER}));
+  } else if (variant === 3) {  // crosshatch
+    ["M0 6 L6 0", "M0 0 L6 6"].forEach(d =>
+      pat.appendChild(s("path", {d, stroke: PAPER, "stroke-width": 1})));
+  }
+  return pat;  // variant 0 = solid (no overlay)
+}
+// CSS background string for a legend swatch echoing the SVG texture.
+function catSwatchBg(color, variant) {
+  if (variant === 1) return `background:repeating-linear-gradient(45deg, ${color} 0 3px, ${PAPER} 3px 4px)`;
+  if (variant === 2) return `background:radial-gradient(${PAPER} 28%, transparent 30%) 0 0/4px 4px, ${color}`;
+  if (variant === 3) return `background:repeating-linear-gradient(45deg, ${color} 0 3px, ${PAPER} 3px 4px), repeating-linear-gradient(-45deg, transparent 0 3px, ${PAPER} 3px 4px)`;
+  return `background:${color}`;
 }
 
 // ---- shared tooltip (one element, reused by every chart) ----
@@ -584,52 +653,102 @@ function groupedBars(id, rows, series) {
   scroll.appendChild(svg); host.appendChild(scroll);
 }
 
+// ---- single-series mini bar chart (one per metric in the §overview 2×2 grid) ----
+// host: a container element; rows: DATA.overview; key: which count to plot.
+function miniBars(host, rows, key, title, color) {
+  const wrap = document.createElement("div");
+  const h = document.createElement("p"); h.className = "mini-title"; h.textContent = title;
+  wrap.appendChild(h);
+  if (!rows.length) { host.appendChild(wrap); empty(wrap.id || "", "Nincs adat."); return; }
+  const W = 480, H = 260, m = {t: 14, r: 12, b: 40, l: 62};
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = niceMax(Math.max(...rows.map(r => r[key])));
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
+    "aria-label": `${title} évtizedenként.`});
+  const g = s("g", {transform: `translate(${m.l},${m.t})`});
+  for (let t = 0; t <= 4; t++) {
+    const y = ih - (ih * t / 4), val = Math.round(max * t / 4);
+    g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
+    g.appendChild(s("text", {x: -10, y: y + 5, "text-anchor": "end", fill: MUTED, "font-size": 14}, val.toLocaleString("hu")));
+  }
+  const bw = iw / rows.length, inner = bw * 0.6;
+  rows.forEach((r, i) => {
+    const x0 = i * bw + (bw - inner) / 2, bh = ih * (r[key] / max);
+    const rect = s("rect", {x: x0, y: ih - bh, width: inner, height: bh, fill: color,
+      role: "img", "aria-label": `${decadeLabel(r.decade)}, ${title}: ${r[key]}`});
+    g.appendChild(rect);
+    bindTip(rect, `<b>${decadeLabel(r.decade)}</b> · ${title}<br>${(+r[key]).toLocaleString("hu")}`);
+    const label = decadeLabel(r.decade) + (r.low_n ? " ★" : "");
+    g.appendChild(s("text", {x: i * bw + bw / 2, y: ih + 16, "text-anchor": "middle",
+      fill: r.low_n ? "var(--accent)" : MUTED, "font-size": 11,
+      transform: `rotate(-35 ${i * bw + bw / 2} ${ih + 16})`}, label));
+  });
+  svg.appendChild(g);
+  const scroll = document.createElement("div"); scroll.className = "chart-scroll";
+  scroll.appendChild(svg); wrap.appendChild(scroll); host.appendChild(wrap);
+}
+
 // ---- 100% stacked bar chart (emotion / genre proportions by decade) ----
 // rows: [{decade, n, share:{key:frac}, low_n?}]; cats: [{key,label,color}].
 // opts.overall ({share, n}) appends a bold "Összes" aggregate column.
 function stackedBars(id, rows, cats, opts = {}) {
   const host = document.getElementById(id);
   if (!rows.length) { empty(id, opts.emptyMsg || "Nincs adat."); return; }
+  // opts.textured: distinct color×pattern fills (for many categories, e.g. topics).
+  const textured = !!opts.textured;
+  const fillOf = (c, ci) => textured ? `url(#pat-${id}-${ci})` : c.color;
   const leg = document.createElement("div"); leg.className = "legend";
-  cats.forEach(c => { const sp = document.createElement("span");
-    sp.innerHTML = `<span class="sw" style="background:${c.color}"></span>${c.label}`; leg.appendChild(sp); });
+  cats.forEach((c, ci) => { const sp = document.createElement("span");
+    const bg = textured ? catSwatchBg(c.color, c.variant) : `background:${c.color}`;
+    sp.innerHTML = `<span class="sw" style="${bg}"></span>${c.label}`; leg.appendChild(sp); });
   host.appendChild(leg);
 
-  const cols = rows.map(r => ({label: r.decade + "s", share: r.share, n: r.n, low_n: r.low_n}));
+  const labelFn = opts.labelFn || decadeLabel;
+  // Bigger axis fonts + rotated x-labels for charts squeezed into a half-width
+  // pair grid (emotion), where the default 12px shrinks below readability.
+  const axisFont = opts.axisFont || 12;
+  const rotateX = !!opts.rotateX;
+  const cols = rows.map(r => ({label: labelFn(r.decade), share: r.share, n: r.n, low_n: r.low_n}));
   if (opts.overall && opts.overall.n)
     cols.push({label: "Összes", share: opts.overall.share, n: opts.overall.n, overall: true});
 
-  const W = 1000, H = 380, m = {t: 16, r: 14, b: 56, l: 46};
+  const W = 1000, H = 380, m = {t: 16, r: 14, b: rotateX ? 92 : 56, l: 46};
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
   const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
     "aria-label": opts.ariaLabel || "Halmozott oszlopdiagram évtizedenként."});
+  if (textured) {
+    const defs = s("defs");
+    cats.forEach((c, ci) => defs.appendChild(makePattern(`pat-${id}-${ci}`, c.color, c.variant)));
+    svg.appendChild(defs);
+  }
   const g = s("g", {transform: `translate(${m.l},${m.t})`});
   for (let t = 0; t <= 4; t++) {
     const y = ih - (ih * t / 4);
     g.appendChild(s("line", {class: "gridline", x1: 0, y1: y, x2: iw, y2: y}));
-    g.appendChild(s("text", {x: -10, y: y + 4, "text-anchor": "end", fill: MUTED, "font-size": 12}, (25 * t) + "%"));
+    g.appendChild(s("text", {x: -10, y: y + 4, "text-anchor": "end", fill: MUTED, "font-size": axisFont}, (25 * t) + "%"));
   }
   const bw = iw / cols.length, inner = Math.min(bw * 0.62, 76);
   cols.forEach((col, i) => {
     const x0 = i * bw + (bw - inner) / 2;
     let acc = 0;
-    cats.forEach(c => {
+    cats.forEach((c, ci) => {
       const frac = (col.share && col.share[c.key]) || 0;
       if (frac <= 0) return;
       const yTop = ih - (acc + frac) * ih;
-      const rect = s("rect", {x: x0, y: yTop, width: inner, height: frac * ih, fill: c.color,
+      const rect = s("rect", {x: x0, y: yTop, width: inner, height: frac * ih, fill: fillOf(c, ci),
         stroke: PAPER, "stroke-width": 0.5, role: "img",
         "aria-label": `${col.label}, ${c.label}: ${Math.round(frac * 100)}%`});
       g.appendChild(rect);
-      bindTip(rect, `<b>${col.label}</b> · ${c.label}<br>${(frac * 100).toFixed(1)}% · n=${col.n.toLocaleString("hu")}`);
+      bindTip(rect, `<b>${col.label}</b> · ${c.label}<br>${(frac * 100).toFixed(1)}%`);
       acc += frac;
     });
     const lab = col.label + (col.low_n ? " ★" : "");
-    g.appendChild(s("text", {x: x0 + inner / 2, y: ih + 18, "text-anchor": "middle",
-      fill: col.low_n ? "var(--accent)" : (col.overall ? INK : MUTED), "font-size": 12,
-      "font-weight": col.overall ? "700" : "400"}, lab));
-    g.appendChild(s("text", {x: x0 + inner / 2, y: ih + 34, "text-anchor": "middle",
-      fill: MUTED, "font-size": 10}, "n=" + col.n.toLocaleString("hu")));
+    const lx = x0 + inner / 2, ly = ih + (rotateX ? 16 : 18);
+    const tattrs = {x: lx, y: ly, "text-anchor": rotateX ? "end" : "middle",
+      fill: col.low_n ? "var(--accent)" : (col.overall ? INK : MUTED), "font-size": axisFont,
+      "font-weight": col.overall ? "700" : "400"};
+    if (rotateX) tattrs.transform = `rotate(-35 ${lx} ${ly})`;
+    g.appendChild(s("text", tattrs, lab));
   });
   svg.appendChild(g);
   const scroll = document.createElement("div"); scroll.className = "chart-scroll";
@@ -649,15 +768,22 @@ function multiLine(id, legendId, labels, lines, opts = {}) {
     : niceMax(Math.max(0.0001, ...lines.flatMap(l => l.values.filter(v => v != null))));
 
   // Stable palette slot per series (same series = same color across charts);
-  // emphasize the top-N by peak value, the rest render as muted context.
+  // emphasize the top-N (by passed order if opts.emphasizeFirst, else by peak),
+  // the rest render as context — muted grey, or faded-but-own-colour when
+  // opts.fadeColor (so every series stays traceable, e.g. all 29 topics).
   const peak = ln => Math.max(0, ...ln.values.filter(v => v != null));
-  const emph = new Set(lines.map((l, i) => [i, peak(l)]).sort((a, b) => b[1] - a[1])
-    .slice(0, emphasizeN).map(o => o[0]));
+  const emph = opts.emphasizeFirst
+    ? new Set(lines.map((_, i) => i).slice(0, emphasizeN))
+    : new Set(lines.map((l, i) => [i, peak(l)]).sort((a, b) => b[1] - a[1])
+        .slice(0, emphasizeN).map(o => o[0]));
   lines.forEach((ln, i) => {
     ln._pal = ln.color || PALETTE[i % PALETTE.length];
     ln._emph = emph.has(i);
     ln._vis = true;
   });
+  // Per-line resting stroke colour + opacity (shared by draw + highlight reset).
+  const colOf = ln => ln._emph ? ln._pal : (opts.fadeColor ? ln._pal : CTX_COLOR);
+  const opOf = ln => ln._emph ? 1 : (opts.fadeColor ? 0.28 : 0.55);
 
   const W = 1000, H = 400, m = {t: 16, r: 132, b: rotateX ? 70 : 44, l: 64};
   const iw = W - m.l - m.r, ih = H - m.t - m.b;
@@ -669,15 +795,18 @@ function multiLine(id, legendId, labels, lines, opts = {}) {
   const toggle = document.createElement("div");
   toggle.className = "toggle"; toggle.setAttribute("role", "group");
   toggle.setAttribute("aria-label", "Nézetváltó");
-  const bOver = document.createElement("button"); bOver.textContent = "Átfedő"; bOver.setAttribute("aria-pressed", "true");
-  const bMul = document.createElement("button"); bMul.textContent = "Kis többszörös"; bMul.setAttribute("aria-pressed", "false");
+  const bOver = document.createElement("button"); bOver.textContent = "Egy ábrán"; bOver.setAttribute("aria-pressed", "true");
+  const bMul = document.createElement("button"); bMul.textContent = "Külön ábrákon"; bMul.setAttribute("aria-pressed", "false");
   toggle.append(bOver, bMul);
   const overBox = document.createElement("div"); overBox.className = "chart-scroll";
   const mulBox = document.createElement("div"); mulBox.style.display = "none";
   wrap.append(toggle, overBox, mulBox);
   host.appendChild(wrap);
-  // Pull the (separately-placed) legend into the wrap, just below the toggle.
-  if (legendId) { const le = document.getElementById(legendId); if (le) wrap.insertBefore(le, overBox); }
+  // Pull the (separately-placed) legend into the wrap — below the chart when
+  // opts.legendBelow (keeps a long legend out of the way), else below the toggle.
+  if (legendId) { const le = document.getElementById(legendId); if (le) {
+    if (opts.legendBelow) wrap.append(le); else wrap.insertBefore(le, overBox);
+  }}
 
   // ---- overlaid view ----
   const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", class: "wide-chart",
@@ -703,10 +832,10 @@ function multiLine(id, legendId, labels, lines, opts = {}) {
     return d.trim(); };
   // Context lines underneath, emphasized lines on top.
   lines.forEach((ln, idx) => {
-    const col = ln._emph ? ln._pal : CTX_COLOR;
-    const p = s("path", {d: pathFor(ln), fill: "none", stroke: col,
+    const p = s("path", {d: pathFor(ln), fill: "none", stroke: colOf(ln),
       "stroke-width": ln._emph ? 2.4 : 1.2, "stroke-linejoin": "round",
-      "stroke-opacity": ln._emph ? 1 : 0.55});
+      "stroke-linecap": "round", "stroke-dasharray": ln.dash || "",
+      "stroke-opacity": opOf(ln)});
     p.style.cursor = "pointer";
     g.appendChild(p);
     const pts = [];
@@ -733,18 +862,17 @@ function multiLine(id, legendId, labels, lines, opts = {}) {
     let prev = -1e9; const minGap = 14;
     items.forEach(it => { let y = Math.max(it.y, prev + minGap); prev = y;
       const t = s("text", {x: iw + 8, y: y + 4, "text-anchor": "start", fill: it.col, "font-size": 12},
-        it.name.length > 16 ? it.name.slice(0, 15) + "…" : it.name);
+        it.name.length > 22 ? it.name.slice(0, 21) + "…" : it.name);
       labLayer.appendChild(t); });
   }
   drawEndLabels();
 
   function highlight(idx) {
     paths.forEach(o => {
-      const on = idx == null ? o.ln._emph : o.idx === idx;
-      o.p.setAttribute("stroke", o.idx === idx ? o.ln._pal : (o.ln._emph ? o.ln._pal : CTX_COLOR));
-      o.p.setAttribute("stroke-opacity", idx == null ? (o.ln._emph ? 1 : 0.55) : (o.idx === idx ? 1 : 0.12));
+      o.p.setAttribute("stroke", o.idx === idx ? o.ln._pal : colOf(o.ln));
+      o.p.setAttribute("stroke-opacity", idx == null ? opOf(o.ln) : (o.idx === idx ? 1 : 0.1));
       o.p.setAttribute("stroke-width", o.idx === idx ? 3.2 : (o.ln._emph ? 2.4 : 1.2));
-      o.pts.forEach(c => c.setAttribute("opacity", idx == null ? 1 : (o.idx === idx ? 1 : 0.12)));
+      o.pts.forEach(c => c.setAttribute("opacity", idx == null ? 1 : (o.idx === idx ? 1 : 0.1)));
     });
   }
   g.appendChild(labLayer);
@@ -754,11 +882,16 @@ function multiLine(id, legendId, labels, lines, opts = {}) {
   if (legendId) {
     const leg = document.getElementById(legendId);
     lines.forEach((ln, idx) => {
-      const col = ln._emph ? ln._pal : CTX_COLOR;
+      const col = colOf(ln);
       const sp = document.createElement("span");
       sp.tabIndex = 0; sp.setAttribute("role", "button"); sp.setAttribute("aria-pressed", "true");
       sp.setAttribute("aria-label", `${ln.name} sorozat ki-/bekapcsolása`);
-      sp.innerHTML = `<span class="sw" style="background:${col}"></span>${ln.name}`;
+      // Dashed line-swatch when the series carries a dash style (so color+dash
+      // identify each topic); a solid colour square otherwise.
+      const sw = ln.dash !== undefined
+        ? `<svg class="sw-line" width="24" height="10" aria-hidden="true"><line x1="1" y1="5" x2="23" y2="5" stroke="${col}" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="${ln.dash || ""}"></line></svg>`
+        : `<span class="sw" style="background:${col}"></span>`;
+      sp.innerHTML = sw + ln.name;
       const setVis = () => {
         ln._vis = !ln._vis;
         sp.classList.toggle("off", !ln._vis);
@@ -798,7 +931,8 @@ function multiLine(id, legendId, labels, lines, opts = {}) {
         "text-anchor": i === 0 ? "start" : "end", fill: MUTED, "font-size": 9}, labels[i])));
       let d = "", st = false; ln.values.forEach((v, i) => { if (v == null) { st = false; return; }
         d += (st ? " L" : " M") + mxOf(i) + " " + myOf(v); st = true; });
-      mg.appendChild(s("path", {d: d.trim(), fill: "none", stroke: ln._pal, "stroke-width": 2}));
+      mg.appendChild(s("path", {d: d.trim(), fill: "none", stroke: ln._pal, "stroke-width": 2,
+        "stroke-linecap": "round", "stroke-dasharray": ln.dash || ""}));
       ln.values.forEach((v, i) => { if (v != null) mg.appendChild(s("circle", {cx: mxOf(i), cy: myOf(v), r: 2, fill: ln._pal})); });
       ms.appendChild(mg);
       const cap = document.createElement("figcaption"); cap.className = "tname";
@@ -951,13 +1085,20 @@ function egoSVG(graph, seed, count) {
 
 // ===== render =====
 (function render() {
-  // Overview
-  groupedBars("c-overview", DATA.overview || [], [
-    {key: "songs", label: "Dalok", color: PALETTE[0]},
-    {key: "performers", label: "Előadók", color: PALETTE[1]},
-    {key: "authors", label: "Szövegírók", color: PALETTE[2]},
-    {key: "composers", label: "Zeneszerzők", color: PALETTE[3]},
-  ]);
+  // Overview — four single-series mini bar charts in a 2×2 grid (the metrics
+  // span very different magnitudes, so a shared-axis grouped chart hid the
+  // smaller series; small multiples give each its own axis).
+  (function () {
+    const host = document.getElementById("c-overview");
+    const rows = DATA.overview || [];
+    if (!rows.length) { empty("c-overview", "Nincs adat — előbb építsd a korpuszt."); return; }
+    [
+      {key: "songs", title: "Dalok", color: PALETTE[0]},
+      {key: "performers", title: "Előadók", color: PALETTE[1]},
+      {key: "authors", title: "Szövegírók", color: PALETTE[2]},
+      {key: "composers", title: "Zeneszerzők", color: PALETTE[3]},
+    ].forEach(m => miniBars(host, rows, m.key, m.title, m.color));
+  })();
 
   // Word clouds — for the decade picked in the dropdown, show two era-styled
   // clouds side by side: most-frequent words (left) and distinctive words
@@ -979,7 +1120,7 @@ function egoSVG(graph, seed, count) {
 
     const decSel = document.createElement("select");
     decSel.setAttribute("aria-label", "Évtized");
-    decades.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d + "s"; decSel.appendChild(o); });
+    decades.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = decadeLabel(d); decSel.appendChild(o); });
     decSel.value = cur;
     const lbl = document.createElement("label"); lbl.textContent = "Évtized: "; lbl.appendChild(decSel);
     ctrls.appendChild(lbl);
@@ -999,9 +1140,7 @@ function egoSVG(graph, seed, count) {
         img.className = "cloud-img"; img.src = "assets/clouds/" + row.cloud.file;
         img.loading = "lazy"; img.alt = ""; img.setAttribute("aria-hidden", "true");
         img.width = row.cloud.width; img.height = row.cloud.height;
-        const cap = document.createElement("figcaption"); cap.className = "note";
-        cap.textContent = opts.caption(row);
-        cloudWrap.append(img, cap);
+        cloudWrap.append(img);
       }
       const listWrap = document.createElement("div");
       const ol = document.createElement("ol"); ol.className = "rank";
@@ -1033,13 +1172,11 @@ function egoSVG(graph, seed, count) {
         title: "Leggyakoribb szavak",
         pillTitle: "előfordulás a korpuszban",
         pill: t => "× " + t.freq,
-        caption: row => `${cur}-es évek · ${row.cloud.n} leggyakoribb tartalmas szó · ${row.cloud.font} · a betűméret a gyakoriságot kódolja`,
       }));
       host.appendChild(cloudFigure(byKn[cur], {
         title: "Megkülönböztető szavak",
         pillTitle: "log-likelihood",
         pill: t => "G² " + t.log_likelihood,
-        caption: row => `${cur}-es évek · ${row.cloud.n} megkülönböztető szó · ${row.cloud.font} · a betűméret a megkülönböztető-erőt (G²) kódolja`,
       }));
     }
     draw();
@@ -1055,14 +1192,19 @@ function egoSVG(graph, seed, count) {
   // Per-decade totals across all topics → proportions.
   const decTotal = {};
   tDecades.forEach(d => decTotal[d] = Object.keys(byTopic).reduce((s, tid) => s + (byTopic[tid][d] || 0), 0));
-  const countLines = Object.keys(byTopic).map(tid => ({
+  // All topics with over-time data, size-ranked. The chart plots a user-chosen
+  // subset (default top 5; capped at 8 so the palette keeps colors distinct).
+  // Proportions still divide by ALL topics' per-decade total (decTotal).
+  const allIds = [...info]
+    .sort((a, b) => (b.size || 0) - (a.size || 0))
+    .map(t => String(t.topic_id))
+    .filter(tid => byTopic[tid]);
+  const lineFor = (tid, metric) => ({
     name: nameOf[tid] || ("#" + tid),
-    values: tDecades.map(d => byTopic[tid][d] != null ? byTopic[tid][d] : 0),
-  }));
-  const propLines = Object.keys(byTopic).map(tid => ({
-    name: nameOf[tid] || ("#" + tid),
-    values: tDecades.map(d => decTotal[d] ? (byTopic[tid][d] || 0) / decTotal[d] : 0),
-  }));
+    values: tDecades.map(d => metric === "prop"
+      ? (decTotal[d] ? (byTopic[tid][d] || 0) / decTotal[d] : 0)
+      : (byTopic[tid][d] != null ? byTopic[tid][d] : 0)),
+  });
   function renderTopicsChart(metric) {
     const chart = document.getElementById("c-topics");
     chart.innerHTML = "";
@@ -1072,19 +1214,24 @@ function egoSVG(graph, seed, count) {
     if (old) old.remove();
     const leg = document.createElement("div"); leg.id = "c-topics-legend"; leg.className = "legend";
     chart.parentNode.insertBefore(leg, chart);
-    if (metric === "prop") {
-      multiLine("c-topics", "c-topics-legend", tDecades.map(d => d + "s"), propLines,
-        {yUnit: "arány (évtizeden belül)", fmt: v => Math.round(v * 100) + "%", emphasize: 6});
-    } else {
-      multiLine("c-topics", "c-topics-legend", tDecades.map(d => d + "s"), countLines,
-        {yUnit: "dalok száma", fmt: v => String(Math.round(v)), emphasize: 6});
-    }
+    // ALL topics, each with a stable color × dash identity (matches the textured
+    // topic×stílus bars). The 6 largest are emphasized; the rest stay visible but
+    // faded so the chart shows every topic without drowning the story.
+    const lines = allIds.map((tid, i) => {
+      const st = catStyle(i);
+      return {...lineFor(tid, metric), color: st.color, dash: DASH_VARIANTS[st.variant]};
+    });
+    const o = metric === "prop"
+      ? {yUnit: "arány (évtizeden belül)", fmt: v => Math.round(v * 100) + "%"}
+      : {yUnit: "dalok száma", fmt: v => String(Math.round(v))};
+    multiLine("c-topics", "c-topics-legend", tDecades.map(decadeLabel), lines,
+      {...o, emphasize: 6, emphasizeFirst: true, fadeColor: true, legendBelow: true});
   }
-  if (countLines.length) {
+  if (allIds.length) {
     document.getElementById("c-topics-metric").appendChild(makeToggle(
-      [{label: "Darabszám", value: "count"}, {label: "Arány", value: "prop"}],
+      [{label: "Arány", value: "prop"}, {label: "Dalok száma", value: "count"}],
       v => renderTopicsChart(v), "Téma-mérőszám"));
-    renderTopicsChart("count");
+    renderTopicsChart("prop");
   }
 
   // Témakártyák — compact: a topic dropdown + a single detail card.
@@ -1102,8 +1249,8 @@ function egoSVG(graph, seed, count) {
       const t = byId[tid]; cardHost.innerHTML = "";
       const c = document.createElement("div"); c.className = "card";
       c.innerHTML = `<div class="tname">${t.name}</div>` +
-        `<div class="pill">${t.size} dal</div>` +
-        `<div class="kw">${(t.keywords || []).join(", ")}</div>`;
+        `<div class="kw">${(t.keywords || []).join(", ")}</div>` +
+        `<div class="card-n">${t.size} dal</div>`;
       cardHost.appendChild(c);
     };
     sel.addEventListener("change", () => showTopic(sel.value));
@@ -1120,15 +1267,9 @@ function egoSVG(graph, seed, count) {
       {yUnit: "eltérés (1 − koszinusz)", rotateX: true, emphasize: 5});
   } else empty("c-change", "Nincs adat — előbb futtasd a usage_change elemzést.");
 
-  // Heatmap
-  if (u.shift_heatmap && (u.shift_heatmap.words || []).length) {
-    heatmap("c-heatmap", u.shift_heatmap.words, trans, u.shift_heatmap.values,
-      {rowLabel: "Szó", colLabel: "Átmenet", valLabel: "eltérés-intenzitás (1 − koszinusz)"});
-  } else empty("c-heatmap", "Nincs adat — előbb futtasd a usage_change elemzést.");
-
   // Cumulative drift
   if (u.cumulative_drift && u.cumulative_drift.length) {
-    multiLine("c-drift", "c-drift-legend", (u.decades || []).map(d => d + "s"),
+    multiLine("c-drift", "c-drift-legend", (u.decades || []).map(decadeLabel),
       u.cumulative_drift.map(w => ({name: w.word, values: w.drift})),
       {yUnit: "kumulatív eltérés", emphasize: 5});
   } else empty("c-drift", "Nincs adat — előbb futtasd a usage_change elemzést.");
@@ -1153,7 +1294,7 @@ function egoSVG(graph, seed, count) {
 
     const decSel = document.createElement("select");
     decSel.setAttribute("aria-label", "Évtized");
-    decades.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = d + "s"; decSel.appendChild(o); });
+    decades.forEach(d => { const o = document.createElement("option"); o.value = d; o.textContent = decadeLabel(d); decSel.appendChild(o); });
     decSel.value = curDecade;
     const seedSel = document.createElement("select");
     seedSel.setAttribute("aria-label", "Célszó");
@@ -1185,7 +1326,7 @@ function egoSVG(graph, seed, count) {
       const fig = document.createElement("figure"); fig.className = "ego-fig";
       const cap = document.createElement("figcaption"); cap.className = "note";
       const shown = Math.min(curCount, avail);
-      cap.textContent = `„${curSeed}” társszavai (${curDecade}s) — ${shown} legerősebb kapcsolat. A csomópont mérete a szó gyakoriságát, az él vastagsága a kapcsolat erősségét mutatja.`;
+      cap.textContent = `„${curSeed}” társszavai (${decadeLabel(curDecade)}) — ${shown} legerősebb kapcsolat. A csomópont mérete a szó gyakoriságát, az él vastagsága a kapcsolat erősségét mutatja.`;
       if (curView === "net") {
         fig.appendChild(egoSVG(g, curSeed, curCount));
         fig.appendChild(cap);
@@ -1217,7 +1358,7 @@ function egoSVG(graph, seed, count) {
         const wrap = document.createElement("div"); wrap.className = "cols";
         w.by_decade.forEach(bd => {
           const col = document.createElement("div");
-          col.innerHTML = `<div class="pill">${bd.decade}s</div>` +
+          col.innerHTML = `<div class="pill">${decadeLabel(bd.decade)}</div>` +
             bd.neighbors.map(n => `<div>${n.word} <span class="note">${n.similarity}</span></div>`).join("");
           wrap.appendChild(col);
         });
@@ -1227,21 +1368,34 @@ function egoSVG(graph, seed, count) {
     } else empty("c-neighbors", "Nincs adat — előbb futtasd a usage_change vagy a networks elemzést.");
   }
 
-  // Vocab + lexical diversity
-  if (u.vocab_stats && u.vocab_stats.length) {
-    table("c-vocab", ["Évtized", "Szókincs", "Lexikai változatosság", "Dalok száma"],
-      u.vocab_stats.map(v => [v.decade + "s", v.vocab_size,
-        v.lexdiv != null ? v.lexdiv.toFixed(3) : "—", v.n_songs]));
-  } else empty("c-vocab", "Nincs adat — előbb futtasd a usage_change elemzést.");
+  // Lexical diversity by decade (MATTR) — left half of the §lexdiv pair; the
+  // by-stílus half is rendered in the associations block from a.lexdiv.
+  (function () {
+    const rows = (u.vocab_stats || []).filter(v => v.lexdiv != null)
+      .map(v => ({label: decadeLabel(v.decade), value: v.lexdiv}));
+    if (rows.length) {
+      barList(document.getElementById("c-lexdiv-decade"), rows, {fmt: v => v.toFixed(3)});
+    } else empty("c-lexdiv-decade", "Nincs adat — előbb futtasd a usage_change elemzést.");
+  })();
 
-  // Genre — műfaji megoszlás évtizedenként (Discogs, 100% halmozott).
+  // Genre — zenei stílusok megoszlása évtizedenként (Discogs, 100% halmozott).
+  // Only styles with an overall share ≥ 5% get their own band; the long tail is
+  // folded into "Egyéb" — this also keeps the category count within the palette.
   (function () {
     const gd = DATA.genre || {};
     const decs = gd.by_decade || [];
-    if (!decs.length) { empty("c-genre", "Nincs adat — előbb futtasd a Discogs műfaj-címkézést (python -m src.enrich.genre)."); return; }
-    const cats = (gd.genres || []).map((g, i) => ({key: g, label: g, color: PALETTE[i % PALETTE.length]}));
-    const rows = decs.map(d => ({decade: d.decade, n: d.n, share: d.share, low_n: d.n < 50}));
-    stackedBars("c-genre", rows, cats, {overall: gd.overall, ariaLabel: "Műfaji megoszlás évtizedenként."});
+    if (!decs.length) { empty("c-genre", "Nincs adat — előbb futtasd a Discogs stílus-címkézést (python -m src.enrich.genre)."); return; }
+    const overallShare = (gd.overall && gd.overall.share) || {};
+    const VIS = (gd.genres || []).filter(g => (overallShare[g] || 0) >= 0.05)
+      .sort((a, b) => (overallShare[b] || 0) - (overallShare[a] || 0));
+    const cats = VIS.map((g, i) => ({key: g, label: genreHu(g), color: PALETTE[i]}));
+    cats.push({key: "Egyéb", label: "Egyéb", color: PALETTE[VIS.length]});
+    const rows = decs.map(d => ({decade: d.decade, n: d.n, low_n: d.n < 50,
+      share: bucketShare(d.share, VIS, "Egyéb")}));
+    const overall = gd.overall
+      ? {n: gd.overall.total || gd.overall.n, share: bucketShare(overallShare, VIS, "Egyéb")}
+      : null;
+    stackedBars("c-genre", rows, cats, {overall, ariaLabel: "Zenei stílusok megoszlása évtizedenként."});
   })();
 
   // Emotion — érzelmi megoszlás évtizedenként (XLM-RoBERTa, 100% halmozott).
@@ -1249,11 +1403,10 @@ function egoSVG(graph, seed, count) {
     const ed = DATA.emotion || {};
     const decs = ed.by_decade || [];
     if (!decs.length) { empty("c-emotion", "Nincs adat — előbb futtasd az érzelem-osztályozót (python -m src.lyrics.emotion run)."); return; }
-    const labelMap = {anger: "harag", fear: "félelem", joy: "öröm", sadness: "szomorúság"};
-    const colorMap = {anger: "#aa3333", fear: "#7d3c98", joy: "#caa53d", sadness: "#34568b"};
-    const cats = (ed.labels || []).map(l => ({key: l, label: labelMap[l] || l, color: colorMap[l] || MUTED}));
+    const cats = emoCats(ed.labels);
     const rows = decs.map(d => ({decade: d.decade, n: d.n, share: d.share, low_n: d.n < 50}));
-    stackedBars("c-emotion", rows, cats, {overall: ed.overall, ariaLabel: "Érzelmi megoszlás évtizedenként."});
+    stackedBars("c-emotion", rows, cats, {overall: ed.overall, axisFont: 20, rotateX: true,
+      ariaLabel: "Érzelmi megoszlás évtizedenként."});
   })();
 
   // Alkotói hálózat — songwriter collaboration network metrics: three centrality
@@ -1272,7 +1425,7 @@ function egoSVG(graph, seed, count) {
     }
     const decKeys = keys.filter(k => k !== "aggregate").sort();
     const order = (slices.aggregate ? ["aggregate"] : []).concat(decKeys);
-    const labelOf = k => k === "aggregate" ? "Összes" : k.replace("decade_", "") + "s";
+    const labelOf = k => k === "aggregate" ? "Összes" : decadeLabel(k.replace("decade_", ""));
     let cur = order[0], view = "metrics";
 
     const sel = document.createElement("select");
@@ -1471,25 +1624,35 @@ function egoSVG(graph, seed, count) {
     host.appendChild(wrap);
   }
 
-  // Műfaji összefüggések — emotion×genre + topic×genre heatmaps, lexdiv bars.
+  // Stílusonkénti összefüggések — emotion-by-stílus + topic-by-stílus as 100%
+  // stacked bars (a composition per stílus, not a correlation), + lexdiv bars.
   (function () {
     const a = DATA.associations || {};
-    const emoLabel = {anger: "harag", fear: "félelem", joy: "öröm", sadness: "szomorúság"};
-    const matrix = block => block.rows.map(r => block.categories.map(c => r.shares[c]));
+
+    // Érzelmek eloszlása zenei stílusonként (right half of the §emotion pair).
     if (a.emotion && a.emotion.rows.length) {
-      heatmap("c-assoc-emotion", a.emotion.rows.map(r => r.genre),
-        a.emotion.categories.map(c => emoLabel[c] || c), matrix(a.emotion),
-        {rowLabel: "Műfaj", colLabel: "Érzelem", valLabel: "arány"});
-    } else empty("c-assoc-emotion", "Nincs adat — előbb az érzelem- és műfaj-elemzés.");
+      const rows = a.emotion.rows.map(r => ({decade: r.genre, n: r.n, share: r.shares, low_n: false}));
+      stackedBars("c-assoc-emotion", rows, emoCats(a.emotion.categories),
+        {labelFn: genreHu, axisFont: 20, rotateX: true,
+         ariaLabel: "Érzelmek eloszlása zenei stílusonként."});
+    } else empty("c-assoc-emotion", "Nincs adat — előbb az érzelem- és stíluselemzés.");
+
+    // Témák eloszlása zenei stílusonként — ALL topics (size-ranked from build),
+    // each a distinct color×texture fill; shares already sum to 1.0 per stílus.
     if (a.topic && a.topic.rows.length) {
-      heatmap("c-assoc-topic", a.topic.rows.map(r => r.genre), a.topic.categories, matrix(a.topic),
-        {rowLabel: "Műfaj", colLabel: "Téma", valLabel: "arány"});
-    } else empty("c-assoc-topic", "Nincs adat — előbb a téma- és műfaj-elemzés.");
+      const cols = a.topic.categories;
+      const rows = a.topic.rows.map(r => ({decade: r.genre, n: r.n, share: r.shares, low_n: false}));
+      const cats = cols.map((t, i) => ({key: t, label: t, ...catStyle(i)}));
+      stackedBars("c-assoc-topic", rows, cats,
+        {labelFn: genreHu, textured: true, ariaLabel: "Témák eloszlása zenei stílusonként."});
+    } else empty("c-assoc-topic", "Nincs adat — előbb a téma- és stíluselemzés.");
+
+    // Szókincs változatossága zenei stílusonként (right half of the §lexdiv pair).
     if (a.lexdiv && a.lexdiv.rows.length) {
       const rows = [...a.lexdiv.rows].sort((x, y) => y.mattr - x.mattr)
-        .map(r => ({label: r.genre, value: r.mattr}));
-      barList(document.getElementById("c-assoc-lexdiv"), rows, {fmt: v => v.toFixed(3), color: cssVar("--c4")});
-    } else empty("c-assoc-lexdiv", "Nincs adat.");
+        .map(r => ({label: genreHu(r.genre), value: r.mattr}));
+      barList(document.getElementById("c-lexdiv-genre"), rows, {fmt: v => v.toFixed(3), color: cssVar("--c4")});
+    } else empty("c-lexdiv-genre", "Nincs adat.");
   })();
 
   // Rímek — rhyme density by decade + genre, type mix, scheme distribution.
@@ -1500,20 +1663,54 @@ function egoSVG(graph, seed, count) {
       empty("c-rhyme", "Nincs adat — előbb futtasd a rím-elemzést (python -m src.lyrics.rhyme run)."); return;
     }
     const pct = v => Math.round(v * 100) + "%";
-    const grid = document.createElement("div"); grid.className = "cols";
+    const ex = r.examples || {};
+    const attrHtml = p => `${p.performer} – ${p.title}`;
+    // Wrap a line's final word in its rhyme-group color.
+    const colorEnd = (line, color) =>
+      line.replace(/(\p{L}[\p{L}'’-]*)(\P{L}*)$/u,
+        `<span style="color:${color};font-weight:700">$1</span>$2`);
+
+    // Rímsűrűség — by decade + by stílus, side by side filling the full width.
+    const grid = document.createElement("div"); grid.className = "pair-grid";
     const dec = document.createElement("div");
     dec.innerHTML = "<h3>Rímsűrűség évtizedenként</h3>";
-    barList(dec, r.by_decade.map(d => ({label: d.decade + "s", value: d.density})), {max: 1, fmt: pct});
+    barList(dec, r.by_decade.map(d => ({label: decadeLabel(d.decade), value: d.density})), {max: 1, fmt: pct});
     const gen = document.createElement("div");
-    gen.innerHTML = "<h3>Rímsűrűség műfajonként</h3>";
+    gen.innerHTML = "<h3>Rímsűrűség zenei stílusonként</h3>";
     const grows = Object.entries(r.by_genre || {}).filter(([, s]) => s.n >= 40)
-      .sort((x, y) => y[1].density - x[1].density).map(([g, s]) => ({label: g, value: s.density}));
+      .sort((x, y) => y[1].density - x[1].density).map(([g, s]) => ({label: genreHu(g), value: s.density}));
     barList(gen, grows, {max: 1, fmt: pct, color: cssVar("--c4")});
     grid.append(dec, gen); host.appendChild(grid);
 
+    // Rímtípusok — definition + a real attributed example per type, then the mix.
     const t = (r.overall && r.overall.types) || {};
+    const exT = ex.types || {};
     const tdiv = document.createElement("div");
-    tdiv.innerHTML = "<h3>Rímtípusok</h3><p class=\"metric-cap\">A rímpárok megoszlása; a ragrím (toldalék-rím) az asszonáncon/tisztán belüli „könnyű” rím.</p>";
+    tdiv.innerHTML = "<h3>Rímtípusok</h3>";
+    const defs = [
+      ["asszonánc", "Asszonánc", "a magánhangzók csengenek össze, a szóvégi mássalhangzók nem feltétlenül"],
+      ["tiszta", "Tiszta rím", "a szavak vége hangról hangra megegyezik"],
+      ["ragrím", "Ragrím", "a rím pusztán a közös toldalékból fakad — a magyar „könnyű” rímje"],
+    ];
+    const tw = document.createElement("div"); tw.className = "rhyme-types";
+    defs.forEach(([key, name, def]) => {
+      const p = document.createElement("p"); p.className = "rhyme-type";
+      p.innerHTML = `<b>${name}</b> — ${def}.`;
+      const e = exT[key];
+      if (e) {
+        // No link (the page is self-contained) — hover shows a real excerpt.
+        const span = document.createElement("span"); span.className = "rex";
+        span.innerHTML = ` — pl. <i>${e.words.join(" / ")}</i>`;
+        if (e.lines) {
+          span.style.cursor = "help";
+          bindTip(span, `${e.lines.join("<br>")}` +
+            `<br><span class="tip-credit">${attrHtml(e)}</span>`);
+        }
+        p.appendChild(span);
+      }
+      tw.appendChild(p);
+    });
+    tdiv.appendChild(tw);
     barList(tdiv, [
       {label: "asszonánc", value: t["asszonánc"] || 0},
       {label: "tiszta rím", value: t["tiszta"] || 0},
@@ -1521,12 +1718,32 @@ function egoSVG(graph, seed, count) {
     ], {max: 1, fmt: pct, color: cssVar("--c6")});
     host.appendChild(tdiv);
 
+    // Gyakori négysoros rímképletek — share of all quatrains + a real, color-coded
+    // four-line example per scheme.
     const sdiv = document.createElement("div");
-    sdiv.innerHTML = "<h3>Gyakori rímképletek (négysoros strófák)</h3>";
+    sdiv.innerHTML = "<h3>Gyakori négysoros rímképletek</h3>" +
+      "<p class=\"metric-cap\">A négysoros strófák rímképletei, az összes elemzett " +
+      "négysoros strófa arányában. A példákban a sorvégi szavak színe a rímcsoportot jelöli.</p>";
     const schemes = r.schemes || [];
-    const maxS = schemes.length ? schemes[0][1] : 1;
-    barList(sdiv, schemes.map(([sc, c]) => ({label: sc, value: c})),
-      {max: maxS, fmt: v => v.toLocaleString("hu"), color: cssVar("--c8")});
+    const total = r.schemes_total || schemes.reduce((s, [, c]) => s + c, 0) || 1;
+    const maxShare = schemes.length ? schemes[0][1] / total : 1;
+    barList(sdiv, schemes.map(([sc, c]) => ({label: sc, value: c / total})),
+      {max: maxShare, fmt: pct, color: cssVar("--c8")});
+    const exS = ex.schemes || {};
+    const sx = document.createElement("div"); sx.className = "rhyme-schemes-ex";
+    schemes.forEach(([sc]) => {
+      const e = exS[sc];
+      if (!e) return;
+      const lines = e.lines
+        .map((ln, i) => colorEnd(ln, PALETTE[(sc.charCodeAt(i) - 65) % PALETTE.length]))
+        .join("<br>");
+      const block = document.createElement("div"); block.className = "rscheme";
+      block.innerHTML = `<div class="rscheme-pat">${sc}</div>` +
+        `<div class="rscheme-lines">${lines}</div>` +
+        `<span class="rattr">${attrHtml(e)}</span>`;
+      sx.appendChild(block);
+    });
+    sdiv.appendChild(sx);
     host.appendChild(sdiv);
   })();
 
@@ -1550,7 +1767,7 @@ function egoSVG(graph, seed, count) {
     } else empty("c-pop-charts", "Nincs adat — előbb futtasd a MAHASZ-scrapert.");
     if (p.era && p.era.length) {
       barList(document.getElementById("c-pop-era"),
-        p.era.map(r => ({label: r.decade + "s", value: r.mean_views})),
+        p.era.map(r => ({label: decadeLabel(r.decade), value: r.mean_views})),
         {fmt: v => v.toLocaleString("hu") + "/hó", color: cssVar("--c6")});
     } else empty("c-pop-era", "Nincs adat.");
   })();
@@ -1560,13 +1777,13 @@ function egoSVG(graph, seed, count) {
 //      sticky chapter bar, prev/next + progress, URL hash and arrow keys. ----
 (function () {
   const CHAPTERS = [
-    {id: "attekintes", title: "Áttekintés", sections: ["overview", "genre"]},
-    {id: "szavak", title: "Szavak", sections: ["keyness", "stats", "assoc-lexdiv"]},
     {id: "temak", title: "Témák", sections: ["topics", "assoc-topic"]},
-    {id: "mufaj-erzelem", title: "Műfaj & érzelem", sections: ["emotion", "assoc-emotion"]},
+    {id: "szavak", title: "Szavak", sections: ["keyness", "lexdiv"]},
+    {id: "erzelem", title: "Érzelem", sections: ["emotion-pair"]},
     {id: "rimek", title: "Rímek", sections: ["rhyme"]},
-    {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "heatmap", "drift", "neighbors"]},
+    {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "drift", "neighbors"]},
     {id: "halozat", title: "Alkotók", sections: ["collab", "popularity"]},
+    {id: "attekintes", title: "Áttekintés", sections: ["overview", "genre"]},
     {id: "modszertan", title: "Módszertan", sections: ["method"]},
   ];
   const track = document.getElementById("chapterbar-track");

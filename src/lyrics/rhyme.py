@@ -25,7 +25,7 @@ import re
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 DEFAULT_RHYME_DIR = Path("data/processed/rhyme")
 
@@ -503,6 +503,8 @@ def aggregate(
         1.0
         >>> agg["schemes"][0]
         ['AABB', 1]
+        >>> agg["schemes_total"]
+        1
     """
 
     def summarize(group: list[dict[str, Any]]) -> dict[str, Any]:
@@ -536,6 +538,9 @@ def aggregate(
         ],
         "by_genre": {g: summarize(rs) for g, rs in by_genre.items()},
         "schemes": [list(x) for x in schemes.most_common(8)],
+        # Total four-line stanzas analyzed, so the dashboard can show each scheme
+        # as a share of all quatrains (not just of the top-8 shown).
+        "schemes_total": sum(schemes.values()),
     }
 
 
@@ -575,6 +580,263 @@ def build_artifacts(
     return agg
 
 
+# ---------------------------------------------------------------------------
+# Example mining (real, short, attributed rhyme examples for the dashboard)
+# ---------------------------------------------------------------------------
+_MIN_EX_WORD = 3
+_MAX_EX_LINE = 60
+_HU_ACCENTS = set("áéíóöőúű")
+# Leading verse/refrain markers to strip from a displayed example line
+# (e.g. "2. Érzem…", "R. Még nem…") — they're not part of the lyric.
+_ENUM_MARKER = re.compile(r"^\s*(?:\d{1,2}|[Rr]|Ref)\.\s*")
+# Skipped only when choosing the *showcased* pick (kept among candidates), so a
+# front-page example isn't crude — the analysis itself keeps every word.
+_HARSH = frozenset({"fasz", "geci", "kurva", "bazmeg", "baszni", "baszik", "picsa"})
+
+
+def _clean_ex_word(w: str | None) -> TypeGuard[str]:
+    """Whether a line-final word is presentable in an example (letters, len≥3).
+
+    Examples:
+        >>> _clean_ex_word("virág"), _clean_ex_word("ó"), _clean_ex_word(None)
+        (True, False, False)
+    """
+    if not w or len(w) < _MIN_EX_WORD:
+        return False
+    return all(c in _HU_LETTERS for c in w.lower())
+
+
+def _clean_ex_line(line: str) -> bool:
+    """Whether a stanza line is short and well-formed enough to showcase.
+
+    Examples:
+        >>> _clean_ex_line("Szállj el kismadár")
+        True
+        >>> _clean_ex_line("a")
+        False
+    """
+    return 3 <= len(line) <= _MAX_EX_LINE and len(_WORD.findall(line)) >= 2
+
+
+def _hungarianish(lines: list[str]) -> bool:
+    """Whether a stanza looks Hungarian (has an accented vowel) — drops English.
+
+    Examples:
+        >>> _hungarianish(["szállj a virág", "fáj a láz"])
+        True
+        >>> _hungarianish(["Legends dyin' too young", "so why believe in you"])
+        False
+    """
+    return any(c in _HU_ACCENTS for line in lines for c in line.lower())
+
+
+def _title_case_hu(title: str) -> str:
+    """Capitalize a title's first letter — zeneszoveg titles arrive lowercased.
+
+    Existing capitals are left intact (so e.g. "Ha én Rózsa Volnék" is unchanged).
+
+    Examples:
+        >>> _title_case_hu("az első szerelem")
+        'Az első szerelem'
+        >>> _title_case_hu("Ha én Rózsa Volnék")
+        'Ha én Rózsa Volnék'
+    """
+    for i, ch in enumerate(title):
+        if ch.isalpha():
+            return title[:i] + ch.upper() + title[i + 1:]
+    return title
+
+
+def _pair_category(a: str, b: str) -> str | None:
+    """Map a rhyming word pair to the example category to showcase it under.
+
+    A suffix rhyme is shown as ``ragrím`` (its defining trait); otherwise the
+    genuine ``tiszta`` / ``asszonánc`` kind.
+
+    Examples:
+        >>> _pair_category("virág", "világ")
+        'tiszta'
+        >>> _pair_category("látok", "várok")
+        'ragrím'
+        >>> _pair_category("ház", "vár")
+        'asszonánc'
+    """
+    got = classify_rhyme(a, b)
+    if not got:
+        return None
+    kind, ragrim = got
+    return "ragrím" if ragrim else kind
+
+
+def song_examples(
+    lyrics: str,
+) -> tuple[dict[str, dict[str, Any]], dict[str, list[str]]]:
+    r"""Mine one example rhyme pair per type + one stanza per scheme from a song.
+
+    Args:
+        lyrics: Raw line-broken lyrics.
+
+    Returns:
+        ``(pairs, stanzas)`` where ``pairs`` maps a type (``asszonánc`` /
+        ``tiszta`` / ``ragrím``) to ``{"words": [a, b], "lines": [lineA, lineB]}``
+        (the rhyming word pair + the two source lines, for a hover excerpt), and
+        ``stanzas`` maps a four-line scheme (``AABB`` …) to the first clean
+        four-line stanza found. All shown lines have ≥2 words and verse markers
+        stripped.
+
+    Examples:
+        >>> lyr = "szállj a virág\nüt a ház\nszállj a világ\nfáj a láz"
+        >>> pairs, stanzas = song_examples(lyr)
+        >>> pairs["tiszta"]["words"]
+        ['virág', 'világ']
+        >>> pairs["tiszta"]["lines"]
+        ['szállj a virág', 'szállj a világ']
+        >>> stanzas["ABAB"]
+        ['szállj a virág', 'üt a ház', 'szállj a világ', 'fáj a láz']
+    """
+    pairs: dict[str, dict[str, Any]] = {}
+    stanzas: dict[str, list[str]] = {}
+    for stanza in split_stanzas(lyrics):
+        disp = [_ENUM_MARKER.sub("", ln).strip() for ln in stanza]
+        ends = [last_word(ln) for ln in stanza]
+        for i, a in enumerate(ends):
+            if not _clean_ex_word(a) or not _clean_ex_line(disp[i]):
+                continue
+            for off, b in enumerate(ends[i + 1 :]):
+                j = i + 1 + off
+                if not _clean_ex_word(b) or a.lower() == b.lower():
+                    continue
+                if not _clean_ex_line(disp[j]):
+                    continue
+                cat = _pair_category(a, b)
+                if cat and cat not in pairs:
+                    pairs[cat] = {"words": [a, b], "lines": [disp[i], disp[j]]}
+        if len(ends) == 4 and all(_clean_ex_word(w) for w in ends):
+            letters = scheme_label(ends)
+            if "." not in letters and letters not in stanzas:
+                if all(_clean_ex_line(ln) for ln in disp) and _hungarianish(disp):
+                    stanzas[letters] = disp
+    return pairs, stanzas
+
+
+def build_examples(
+    db_path: str = "data/music.db",
+    out_dir: Path | str = DEFAULT_RHYME_DIR,
+    *,
+    scan_cap: int = 4000,
+    per_category: int = 6,
+) -> dict[str, Any]:
+    """Mine real, attributed rhyme examples, biased toward well-known artists.
+
+    Scans songs in descending order of their performer's Wikipedia salience
+    (``Artist.avg_monthly_pageviews``), so examples come from recognizable songs.
+    Writes ``examples.json`` with a chosen ``pick`` + ``candidates`` per rhyme
+    type and per four-line scheme. The ``pick`` avoids the harshest words; every
+    example is a short excerpt with ``performer`` / ``title`` / ``url`` attribution.
+
+    Args:
+        db_path: SQLite path.
+        out_dir: Output directory (``examples.json`` is written here).
+        scan_cap: Maximum songs to scan (salience-ordered).
+        per_category: Candidates to keep per type / per scheme.
+
+    Returns:
+        The examples dict (also written to ``examples.json``).
+    """
+    from sqlalchemy import select
+
+    from src.db import (
+        Artist,
+        Performer,
+        Song,
+        SongExternal,
+        SongPerformer,
+        get_engine,
+        make_session,
+    )
+    from src.enrich.match import prettify_name
+
+    engine = get_engine(db_path)
+    try:
+        with make_session(engine)() as session:
+            # Best (highest-salience) performer per song.
+            best: dict[int, tuple[str, float]] = {}
+            for sid, name, views in session.execute(
+                select(Song.id, Performer.name, Artist.avg_monthly_pageviews)
+                .join(SongPerformer, SongPerformer.song_id == Song.id)
+                .join(Performer, Performer.id == SongPerformer.performer_id)
+                .outerjoin(Artist, Artist.id == Performer.artist_id)
+            ):
+                score = float(views) if views is not None else -1.0
+                if sid not in best or score > best[sid][1]:
+                    best[sid] = (name, score)
+            urls = {
+                sid: url
+                for sid, url in session.execute(
+                    select(SongExternal.song_id, SongExternal.url).where(
+                        SongExternal.source == "zeneszoveg"
+                    )
+                )
+            }
+            order = sorted(best, key=lambda s: best[s][1], reverse=True)
+
+            type_cands: dict[str, list[dict[str, Any]]] = {}
+            scheme_cands: dict[str, list[dict[str, Any]]] = {}
+            # At most one candidate per performer per category, so the list spans
+            # many recognizable artists instead of the single most-salient one.
+            type_seen: dict[str, set[str]] = {}
+            scheme_seen: dict[str, set[str]] = {}
+            scanned = 0
+            for sid in order:
+                if scanned >= scan_cap:
+                    break
+                song = session.get(Song, sid)
+                if not song or not song.lyrics:
+                    continue
+                scanned += 1
+                name, views = best[sid]
+                attr = {
+                    "performer": prettify_name(name),
+                    "title": _title_case_hu(song.title),
+                    "url": urls.get(sid),
+                    "views": round(views) if views >= 0 else None,
+                }
+                pairs, stanzas = song_examples(song.lyrics)
+                for cat, ex in pairs.items():
+                    bucket = type_cands.setdefault(cat, [])
+                    seen = type_seen.setdefault(cat, set())
+                    if len(bucket) < per_category and name not in seen:
+                        bucket.append({**ex, **attr})
+                        seen.add(name)
+                for scheme, lines in stanzas.items():
+                    bucket = scheme_cands.setdefault(scheme, [])
+                    seen = scheme_seen.setdefault(scheme, set())
+                    if len(bucket) < per_category and name not in seen:
+                        bucket.append({"lines": lines, **attr})
+                        seen.add(name)
+    finally:
+        engine.dispose()
+
+    def _harsh(strings: list[str]) -> bool:
+        toks = {w.lower() for s in strings for w in _WORD.findall(s)}
+        return bool(toks & _HARSH)
+
+    def _block(cands: list[dict[str, Any]], field: str) -> dict[str, Any]:
+        clean = [c for c in cands if not _harsh(c[field])]
+        return {"pick": (clean or cands)[0], "candidates": cands}
+
+    examples = {
+        "types": {k: _block(v, "words") for k, v in type_cands.items()},
+        "schemes": {k: _block(v, "lines") for k, v in scheme_cands.items()},
+    }
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "examples.json").write_text(
+        json.dumps(examples, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return examples
+
+
 def main() -> None:
     """CLI: ``run`` rhyme analysis, or ``aggregate`` the cached results."""
     import argparse
@@ -588,6 +850,12 @@ def main() -> None:
     r.add_argument("--limit", type=int, default=None)
     r.add_argument("--no-resume", action="store_true")
     sub.add_parser("aggregate", help="build rhyme.json from per-song results")
+    ex = sub.add_parser(
+        "examples", help="mine real attributed rhyme examples (examples.json)"
+    )
+    ex.add_argument("--db", default="data/music.db")
+    ex.add_argument("--out-dir", default=str(DEFAULT_RHYME_DIR))
+    ex.add_argument("--scan-cap", type=int, default=4000)
 
     args = ap.parse_args()
     if args.command == "run":
@@ -607,6 +875,12 @@ def main() -> None:
     elif args.command == "aggregate":
         agg = build_artifacts()
         print(f"Aggregated {agg['overall']['n']} songs -> rhyme.json")
+    elif args.command == "examples":
+        ex = build_examples(args.db, args.out_dir, scan_cap=args.scan_cap)
+        print(
+            f"Mined {len(ex['types'])} type + {len(ex['schemes'])} scheme "
+            f"examples -> {Path(args.out_dir) / 'examples.json'}"
+        )
 
 
 if __name__ == "__main__":

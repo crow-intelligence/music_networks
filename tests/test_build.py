@@ -8,7 +8,13 @@ from collections import Counter
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.dashboard.build import _recombine, frequency_block
+from src.dashboard.build import (
+    _parse_stoplist,
+    _recombine,
+    frequency_block,
+    keyness_block,
+)
+from src.lyrics.decade_keywords import Keyword
 
 _counts = st.dictionaries(
     st.integers(min_value=1950, max_value=2020),
@@ -35,6 +41,43 @@ def test_frequency_block_ranks_by_count(counts, top):
         # Reported freqs match the source counter.
         src = counts[row["decade"]]
         assert all(src[t["term"]] == t["freq"] for t in terms)
+
+
+@given(_counts.filter(bool), st.integers(min_value=1, max_value=40))
+def test_frequency_block_excludes_stoplist_and_stays_full(counts, top):
+    """Excluded tokens never appear, and exclusion is applied before the top-N cut."""
+    # Exclude whatever the single most-frequent term of the first decade is.
+    first = sorted(counts)[0]
+    junk = counts[first].most_common(1)[0][0]
+    exclude = frozenset({junk})
+    block = frequency_block(counts, top=top, exclude=exclude)
+    for row in block:
+        terms = [t["term"] for t in row["terms"]]
+        assert junk not in terms
+        # Filtering happens before the slice: we still surface as many clean terms
+        # as exist (up to `top`), never fewer because a junk token "used up" a slot.
+        clean = [t for t in counts[row["decade"]] if t != junk]
+        assert len(terms) == min(top, len(clean))
+
+
+def test_keyness_block_excludes_stoplist_before_top_n():
+    """Keyness drops excluded terms before ranking, keeping the list full."""
+    kw = {
+        1990: [
+            Keyword("refr", 99.0, 3.0, 50),  # highest LL, but junk
+            Keyword("szív", 80.0, 2.0, 40),
+            Keyword("vár", 70.0, 1.5, 30),
+            Keyword("neg", 60.0, -1.0, 10),  # negatively keyed -> dropped
+        ]
+    }
+    block = keyness_block(kw, top=2, exclude=frozenset({"refr"}))
+    assert [t["term"] for t in block[0]["terms"]] == ["szív", "vár"]
+
+
+def test_parse_stoplist_ignores_comments_and_case():
+    """Whole-line and inline comments are stripped; tokens are lowercased."""
+    text = "Vous\n# header\nREFR  # inline\n\nvoulez_vous\n"
+    assert _parse_stoplist(text) == frozenset({"vous", "refr", "voulez_vous"})
 
 
 _decade_summary = st.builds(

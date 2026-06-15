@@ -6,9 +6,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from src.lyrics.rhyme import (
+    aggregate,
     classify_rhyme,
     common_suffix,
+    last_word,
     scheme_label,
+    song_examples,
     split_stanzas,
     to_phonemes,
 )
@@ -70,6 +73,37 @@ def test_scheme_label_shape(words):
         for j, wj in enumerate(words):
             if wi and wj and wi.lower() == wj.lower():
                 assert label[i] == label[j]
+
+
+def test_aggregate_schemes_total_covers_shown():
+    """``schemes_total`` is every quatrain, so it's >= the sum of the top-8 shown."""
+    rows = [
+        {"song_id": i, "decade": 2010, "lines": 4, "rhymed_lines": 4, "density": 1.0,
+         "types": {"tiszta": 2}, "schemes": {f"S{i % 11}": 1}}
+        for i in range(40)
+    ]
+    agg = aggregate(rows)
+    shown = sum(c for _, c in agg["schemes"])
+    assert agg["schemes_total"] == 40  # one quatrain per row
+    assert agg["schemes_total"] >= shown
+    assert len(agg["schemes"]) <= 8
+
+
+def test_song_examples_match_their_scheme():
+    """A mined stanza's scheme label matches the key it is filed under."""
+    lyr = (
+        "szállj a virág\nüt a nagy ház\nszállj a világ\nfáj a vad láz\n\n"
+        " rövid kis dal\nzeng a halk hang\n"
+    )
+    pairs, stanzas = song_examples(lyr)
+    assert stanzas  # at least one clean 4-line stanza mined
+    for scheme, lines in stanzas.items():
+        assert len(lines) == 4
+        assert scheme_label([last_word(ln) for ln in lines]) == scheme
+    # Each type example carries the rhyming word pair AND its two source lines.
+    for ex in pairs.values():
+        assert len(ex["words"]) == 2 and len(ex["lines"]) == 2
+        assert all(last_word(ln) in ex["words"] for ln in ex["lines"])
 
 
 @given(st.text(max_size=200))

@@ -48,11 +48,56 @@ LOW_N_SONGS = 50
 # How many distinctive terms to surface per decade (word cloud + ranked list).
 WORD_COUNT = 40
 
+# Supplemental junk-token stoplist applied at build time to the word clouds and
+# co-occurrence neighbour lists (foreign words, song-structure markers, vocables,
+# encoding artifacts). Editable without a pipeline rerun; missing file = no-op.
+DEFAULT_STOPLIST = Path("data/misc/stoplist.txt")
+
 # The pre-1950 decades are too sparse to be meaningful (single/double-digit song
 # counts); the dashboard shows only decades from this year on. The 1950s clears
 # the low-N bar (~150 corpus songs) and is included; underlying artifacts for the
 # dropped earlier decades are left intact.
 MIN_DECADE = 1950
+
+
+def _parse_stoplist(text: str) -> frozenset[str]:
+    r"""Parse stoplist text into lowercased tokens, ignoring blanks and comments.
+
+    Args:
+        text: Stoplist file contents — one token per line, ``#`` starts a comment
+            (whole-line or inline).
+
+    Returns:
+        The lowercased tokens as a frozen set.
+
+    Examples:
+        >>> sorted(_parse_stoplist("vous\n# a comment\nREFR\n\nsoir  # inline"))
+        ['refr', 'soir', 'vous']
+    """
+    tokens = set()
+    for line in text.splitlines():
+        token = line.split("#", 1)[0].strip().lower()
+        if token:
+            tokens.add(token)
+    return frozenset(tokens)
+
+
+def load_stoplist(path: Path = DEFAULT_STOPLIST) -> frozenset[str]:
+    """Load the supplemental junk-token stoplist (empty set if the file is absent).
+
+    Args:
+        path: Path to the stoplist text file.
+
+    Returns:
+        The lowercased junk tokens, or an empty set when no file exists.
+
+    Examples:
+        >>> load_stoplist(Path("does/not/exist.txt"))
+        frozenset()
+    """
+    if not path.exists():
+        return frozenset()
+    return _parse_stoplist(path.read_text(encoding="utf-8"))
 
 
 def decade_overview(stats: list[DecadeStat]) -> list[dict[str, Any]]:
@@ -87,7 +132,9 @@ def decade_overview(stats: list[DecadeStat]) -> list[dict[str, Any]]:
 
 
 def keyness_block(
-    by_decade: dict[int, list[Keyword]], top: int = 15
+    by_decade: dict[int, list[Keyword]],
+    top: int = 15,
+    exclude: frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
     """Reduce per-decade keyness to the top over-represented terms per decade.
 
@@ -96,6 +143,8 @@ def keyness_block(
     Args:
         by_decade: Output of :func:`src.lyrics.decade_keywords.keywords_by_decade`.
         top: How many terms to keep per decade.
+        exclude: Lowercased junk tokens to drop *before* taking the top ``top``,
+            so the surfaced list stays full of clean terms (see :func:`load_stoplist`).
 
     Returns:
         One row per decade with its top distinctive terms.
@@ -107,10 +156,17 @@ def keyness_block(
         >>> block = keyness_block(kw, top=2)
         >>> [t["term"] for t in block[0]["terms"]]
         ['a', 'c']
+        >>> block = keyness_block(kw, top=2, exclude=frozenset({"a"}))
+        >>> [t["term"] for t in block[0]["terms"]]
+        ['c']
     """
     out: list[dict[str, Any]] = []
     for decade in sorted(by_decade):
-        keyed = [k for k in by_decade[decade] if k.log_ratio > 0]
+        keyed = [
+            k
+            for k in by_decade[decade]
+            if k.log_ratio > 0 and k.term.lower() not in exclude
+        ]
         keyed.sort(key=lambda k: k.log_likelihood, reverse=True)
         out.append(
             {
@@ -129,7 +185,11 @@ def keyness_block(
     return out
 
 
-def frequency_block(counts: dict[int, Counter], top: int = 15) -> list[dict[str, Any]]:
+def frequency_block(
+    counts: dict[int, Counter],
+    top: int = 15,
+    exclude: frozenset[str] = frozenset(),
+) -> list[dict[str, Any]]:
     """Reduce per-decade token counts to the most frequent content words.
 
     The complement of :func:`keyness_block`: instead of what is *distinctive* of
@@ -140,6 +200,8 @@ def frequency_block(counts: dict[int, Counter], top: int = 15) -> list[dict[str,
         counts: Per-decade token counts, from
             :func:`src.lyrics.decade_keywords.decade_counts`.
         top: How many terms to keep per decade.
+        exclude: Lowercased junk tokens to drop *before* taking the top ``top``,
+            so the surfaced list stays full of clean terms (see :func:`load_stoplist`).
 
     Returns:
         One row per decade with its most frequent terms (``term`` + ``freq``),
@@ -151,15 +213,22 @@ def frequency_block(counts: dict[int, Counter], top: int = 15) -> list[dict[str,
         >>> block = frequency_block(counts, top=2)
         >>> [(t["term"], t["freq"]) for t in block[0]["terms"]]
         [('szív', 9), ('szeret', 5)]
+        >>> block = frequency_block(counts, top=2, exclude=frozenset({"szív"}))
+        >>> [(t["term"], t["freq"]) for t in block[0]["terms"]]
+        [('szeret', 5), ('kép', 1)]
     """
     out: list[dict[str, Any]] = []
     for decade in sorted(counts):
+        ranked = [
+            (term, freq)
+            for term, freq in counts[decade].most_common()
+            if term.lower() not in exclude
+        ]
         out.append(
             {
                 "decade": decade,
                 "terms": [
-                    {"term": term, "freq": freq}
-                    for term, freq in counts[decade].most_common(top)
+                    {"term": term, "freq": freq} for term, freq in ranked[:top]
                 ],
             }
         )
@@ -362,6 +431,40 @@ def load_networks(networks_dir: Path) -> dict[str, Any]:
     return {"decades": meta.get("decades", []), "graphs": graphs}
 
 
+def _filter_graph(graph: dict[str, Any], exclude: frozenset[str]) -> dict[str, Any]:
+    """Drop junk tokens from a co-occurrence graph's nodes / adjacency / seeds.
+
+    Args:
+        graph: A per-decade node-link graph (``nodes`` map, ``adj`` map, ``seeds``).
+        exclude: Lowercased junk tokens to remove (see :func:`load_stoplist`).
+
+    Returns:
+        The graph with junk terms removed from ``nodes``, every ``adj`` key and its
+        neighbour list, and ``seeds``. Returned unchanged when ``exclude`` is empty.
+
+    Examples:
+        >>> g = {"nodes": {"szív": 9, "refr": 5}, "seeds": ["szív"],
+        ...      "adj": {"szív": [["refr", 0.5], ["vár", 0.3]],
+        ...              "refr": [["szív", 0.5]]}}
+        >>> out = _filter_graph(g, frozenset({"refr"}))
+        >>> sorted(out["nodes"]), out["adj"]["szív"], "refr" in out["adj"]
+        (['szív'], [['vár', 0.3]], False)
+    """
+    if not exclude:
+        return graph
+    out = dict(graph)
+    out["nodes"] = {
+        t: w for t, w in graph.get("nodes", {}).items() if t.lower() not in exclude
+    }
+    out["adj"] = {
+        t: [[n, w] for n, w in nbrs if n.lower() not in exclude]
+        for t, nbrs in graph.get("adj", {}).items()
+        if t.lower() not in exclude
+    }
+    out["seeds"] = [s for s in graph.get("seeds", []) if s.lower() not in exclude]
+    return out
+
+
 def _recombine(
     decades: list[dict[str, Any]], keys: list[str], weight: str, denom: str
 ) -> dict[str, Any]:
@@ -479,6 +582,14 @@ def load_rhyme(rhyme_dir: Path) -> dict[str, Any]:
     agg["by_decade"] = [
         d for d in agg.get("by_decade", []) if d["decade"] >= MIN_DECADE
     ]
+    # Curated real examples (only the chosen pick per type / scheme; the candidate
+    # pool stays out of the shipped DATA). See :func:`src.lyrics.rhyme.build_examples`.
+    ex = _load_json(rhyme_dir / "examples.json", {})
+    if ex:
+        agg["examples"] = {
+            "types": {k: v["pick"] for k, v in ex.get("types", {}).items()},
+            "schemes": {k: v["pick"] for k, v in ex.get("schemes", {}).items()},
+        }
     return agg
 
 
@@ -543,13 +654,14 @@ def load_associations(
         name_of = {
             t["topic_id"]: t["name"] for t in topic_info if t.get("topic_id") != -1
         }
-        # Categories = the largest topics (a 9×N heatmap stays readable).
+        # All topics, size-ranked (the dashboard renders them as textured stacked
+        # bars, so every topic gets a distinct color×pattern — no "Egyéb" bucket).
         ranked = sorted(
             (t for t in topic_info if t.get("topic_id") != -1),
             key=lambda t: t.get("size", 0),
             reverse=True,
         )
-        cats = [t["name"] for t in ranked[:14]]
+        cats = [t["name"] for t in ranked]
         topic_label = {
             int(sid): name_of[tid]
             for sid, tid in assignments.items()
@@ -605,12 +717,19 @@ def build(
         for r in decade_overview(collect_decade_stats(db_path))
         if r["decade"] >= MIN_DECADE
     ]
+    stoplist = load_stoplist()
     docs = load_corpus(corpus_dir)
     all_keyness = (
-        keyness_block(keywords_by_decade(docs), top=WORD_COUNT) if docs else []
+        keyness_block(keywords_by_decade(docs), top=WORD_COUNT, exclude=stoplist)
+        if docs
+        else []
     )
     keyness = [r for r in all_keyness if r["decade"] >= MIN_DECADE]
-    all_frequency = frequency_block(decade_counts(docs), top=WORD_COUNT) if docs else []
+    all_frequency = (
+        frequency_block(decade_counts(docs), top=WORD_COUNT, exclude=stoplist)
+        if docs
+        else []
+    )
     frequency = [r for r in all_frequency if r["decade"] >= MIN_DECADE]
     topics_over_time = [
         r
@@ -632,7 +751,9 @@ def build(
     if networks.get("decades"):
         networks["decades"] = [d for d in networks["decades"] if d >= MIN_DECADE]
         networks["graphs"] = {
-            k: v for k, v in networks["graphs"].items() if int(k) >= MIN_DECADE
+            k: _filter_graph(v, stoplist)
+            for k, v in networks["graphs"].items()
+            if int(k) >= MIN_DECADE
         }
 
     emotion = load_emotion(Path(emotion_dir))
