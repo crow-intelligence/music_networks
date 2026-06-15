@@ -173,12 +173,14 @@
   .net-legend { display: flex; flex-wrap: wrap; gap: var(--sp-1) 14px; margin: var(--sp-1) 0; font-size: 0.82rem; color: var(--muted); }
   .net-legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .net-hint { color: var(--muted); font-size: 0.8rem; font-style: italic; margin: var(--sp-1) 0 0; }
-  /* Reusable horizontal bar list (rhyme density, lexical diversity, schemes) */
+  /* Reusable horizontal bar list — x-axis scale under the bars, exact value on
+     hover (instead of cramped end labels). */
   .barlist { margin: var(--sp-1) 0 var(--sp-2); }
-  .barlist-row { display: grid; grid-template-columns: 132px 1fr 60px; gap: 10px; align-items: center; margin: 4px 0; font-size: 0.85rem; }
+  .barlist-row { display: grid; grid-template-columns: 132px 1fr; gap: 10px; align-items: center; margin: 3px 0; font-size: 0.85rem; }
+  .barlist-row:hover { background: var(--card-bg); }
   .barlist-row .blab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .barlist-bar { height: 16px; border-radius: 3px; background: var(--c1); min-width: 2px; }
-  .barlist-val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .barlist-bar { height: 16px; border-radius: 3px; background: var(--c1); min-width: 1px; }
+  .barlist-axis { margin: 5px 0 0 142px; display: flex; justify-content: space-between; border-top: 1px solid var(--grid); padding-top: 3px; color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
   /* §8 ego network */
   .ego-fig { margin: 0; max-width: 760px; }
   .ego-fig svg { margin: 0 auto; }
@@ -360,6 +362,24 @@
     hálózat — a modern, jellemzően önírós rap/trap réteg ezért alulreprezentált.</p>
   <div id="c-collab-controls" class="controls"></div>
   <div id="c-collab"></div>
+</section>
+
+<section id="popularity"><h2>Népszerűség</h2>
+  <h3>Kulturális emlékezet — kiket keresnek ma is</h3>
+  <p class="note">Az előadók <strong>átlagos havi magyar Wikipédia-megtekintése</strong>
+    — mai mérce arra, kire emlékszünk. Az érték <em>jelen idejű</em> figyelem, ezért
+    a mai sztárok és az időtálló legendák egyaránt felül lehetnek.</p>
+  <div id="c-pop-salience"></div>
+  <h3>Slágerlisták (MAHASZ, 2003–2022)</h3>
+  <p class="note">A legtöbb év végi MAHASZ-slágerlistás megjelenés. A sáv az
+    összes megjelenés száma; a sávra mutatva a legjobb elért helyezés is látszik.
+    Csak 2003-tól, és a kiadáson <em>feltüntetett</em> előadó szerint — a közös
+    dalok (pl. „Azahriah &amp; DESH”) külön tételként szerepelnek.</p>
+  <div id="c-pop-charts"></div>
+  <h3>Melyik korszak marad meg?</h3>
+  <p class="note">Az előadók átlagos Wikipédia-megtekintése a <em>születési/alakulási
+    évtizedük</em> szerint — melyik nemzedék köti le ma a legtöbb figyelmet.</p>
+  <div id="c-pop-era"></div>
 </section>
 
 <section id="stats"><h2>Szókincs- és modell-statisztika</h2>
@@ -1400,22 +1420,32 @@ function egoSVG(graph, seed, count) {
     draw();
   }
 
-  // Reusable horizontal bar list: rows [{label, value, sub?}].
+  // Reusable horizontal bar list: rows [{label, value}]. The bar length encodes
+  // the value against a 0…max x-axis scale; the exact value shows on hover.
   function barList(host, rows, opts = {}) {
     const max = opts.max || Math.max(...rows.map(r => r.value), 1e-9);
+    const fmt = opts.fmt || (v => String(v));
     const wrap = document.createElement("div"); wrap.className = "barlist";
     rows.forEach(r => {
       const row = document.createElement("div"); row.className = "barlist-row";
       const lab = document.createElement("div"); lab.className = "blab"; lab.textContent = r.label;
       const track = document.createElement("div");
       const bar = document.createElement("div"); bar.className = "barlist-bar";
-      bar.style.width = Math.max(2, 100 * r.value / max) + "%";
+      bar.style.width = Math.max(1, 100 * r.value / max) + "%";
       if (opts.color) bar.style.background = opts.color;
       track.appendChild(bar);
-      const val = document.createElement("div"); val.className = "barlist-val";
-      val.textContent = opts.fmt ? opts.fmt(r.value) : r.value;
-      row.append(lab, track, val); wrap.appendChild(row);
+      row.append(lab, track);
+      bindTip(row, r.tip || `<b>${r.label}</b><br>${fmt(r.value)}`);
+      wrap.appendChild(row);
     });
+    // x-axis scale (0 … max) aligned under the bars; integer ticks for counts.
+    const tickVal = t => (max <= 1 ? max * t : Math.round(max * t));
+    const axis = document.createElement("div"); axis.className = "barlist-axis";
+    [0, 0.5, 1].forEach(t => {
+      const sp = document.createElement("span"); sp.textContent = fmt(tickVal(t));
+      axis.appendChild(sp);
+    });
+    wrap.appendChild(axis);
     host.appendChild(wrap);
   }
 
@@ -1477,6 +1507,31 @@ function egoSVG(graph, seed, count) {
       {max: maxS, fmt: v => v.toLocaleString("hu"), color: cssVar("--c8")});
     host.appendChild(sdiv);
   })();
+
+  // Népszerűség — cultural salience (Wikipedia pageviews), MAHASZ chart success,
+  // and salience by the artist's generation. All horizontal bar lists.
+  (function () {
+    const p = DATA.popularity || {};
+    if (p.salience && p.salience.length) {
+      barList(document.getElementById("c-pop-salience"),
+        p.salience.map(r => ({label: r.name, value: r.views})),
+        {fmt: v => v.toLocaleString("hu") + "/hó"});
+    } else empty("c-pop-salience", "Nincs adat — előbb futtasd a pageviews-enrichmentet.");
+    if (p.charts && p.charts.length) {
+      barList(document.getElementById("c-pop-charts"),
+        p.charts.map(r => ({
+          label: r.name, value: r.entries,
+          tip: `<b>${r.name}</b><br>${r.entries} slágerlistás megjelenés` +
+            (r.peak ? `<br>legjobb helyezés: ${r.peak}.` : ""),
+        })),
+        {fmt: v => v + " megjelenés", color: cssVar("--c4")});
+    } else empty("c-pop-charts", "Nincs adat — előbb futtasd a MAHASZ-scrapert.");
+    if (p.era && p.era.length) {
+      barList(document.getElementById("c-pop-era"),
+        p.era.map(r => ({label: r.decade + "s", value: r.mean_views})),
+        {fmt: v => v.toLocaleString("hu") + "/hó", color: cssVar("--c6")});
+    } else empty("c-pop-era", "Nincs adat.");
+  })();
 })();
 
 // ---- Navigable chapters: group the sections, show one at a time, with a
@@ -1489,7 +1544,7 @@ function egoSVG(graph, seed, count) {
     {id: "mufaj-erzelem", title: "Műfaj & érzelem", sections: ["emotion", "assoc-emotion"]},
     {id: "rimek", title: "Rímek", sections: ["rhyme"]},
     {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "heatmap", "drift", "neighbors"]},
-    {id: "halozat", title: "Alkotói hálózat", sections: ["collab"]},
+    {id: "halozat", title: "Alkotók", sections: ["collab", "popularity"]},
     {id: "modszertan", title: "Módszertan", sections: ["method"]},
   ];
   const track = document.getElementById("chapterbar-track");

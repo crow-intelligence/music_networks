@@ -187,6 +187,7 @@ def assemble_data(
     collab: dict[str, Any] | None = None,
     rhyme: dict[str, Any] | None = None,
     associations: dict[str, Any] | None = None,
+    popularity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -205,6 +206,7 @@ def assemble_data(
         collab: The collaboration-network blocks (may be empty/``None``).
         rhyme: The rhyme-analysis blocks (may be empty/``None``).
         associations: The genre association cross-tabs (may be empty/``None``).
+        popularity: The artist popularity/salience blocks (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -235,6 +237,7 @@ def assemble_data(
         "collab": collab or {},
         "rhyme": rhyme or {},
         "associations": associations or {},
+        "popularity": popularity or {},
     }
 
 
@@ -479,6 +482,22 @@ def load_rhyme(rhyme_dir: Path) -> dict[str, Any]:
     return agg
 
 
+def load_popularity(db_path: str) -> dict[str, Any]:
+    """Load artist popularity/salience blocks from the DB (empty if unenriched).
+
+    Args:
+        db_path: SQLite DB with the ``artist``/``chart_entry`` enrichment.
+
+    Returns:
+        ``{"salience", "charts", "era"}`` (see
+        :func:`src.lyrics.popularity.build_popularity`); ``{}`` if nothing scored.
+    """
+    from src.lyrics.popularity import build_popularity
+
+    pop = build_popularity(db_path)
+    return pop if pop.get("salience") or pop.get("charts") else {}
+
+
 def load_associations(
     docs: list[Any],
     *,
@@ -626,6 +645,7 @@ def build(
         genre_dir=Path(genre_dir),
         topics_dir=topics_dir,
     )
+    popularity = load_popularity(db_path)
 
     data = assemble_data(
         overview=overview,
@@ -640,6 +660,7 @@ def build(
         collab=collab,
         rhyme=rhyme,
         associations=associations,
+        popularity=popularity,
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
