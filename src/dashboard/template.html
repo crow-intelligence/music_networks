@@ -105,6 +105,16 @@
   nav { font-size: 0.85rem; margin-top: var(--sp-3); line-height: 2; }
   nav a { color: var(--accent); text-decoration: none; margin-right: 14px; white-space: nowrap; }
   nav a:hover { text-decoration: underline; }
+  /* Site navigation bar — links back into crowintelligence.org. Non-sticky so it
+     scrolls away and never collides with the sticky .chapterbar below. */
+  .top-nav { background: var(--card-bg); border-bottom: 1px solid var(--line); }
+  .top-nav .nav-inner { max-width: 1040px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; }
+  .top-nav .nav-brand { font-family: "IM Fell English", Georgia, serif; font-size: 1.2rem; color: var(--ink); text-decoration: none; white-space: nowrap; }
+  .top-nav .nav-brand:hover { color: var(--accent); }
+  .top-nav .nav-links { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; }
+  .top-nav .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1.5px; margin: 0; white-space: nowrap; }
+  .top-nav .nav-links a:hover { color: var(--accent); text-decoration: none; }
+  footer a { color: var(--accent); }
   .note { color: var(--muted); font-size: var(--fs-caption); font-style: italic; max-width: var(--measure); }
   /* Prose links (e.g. §Módszertan references) — accent, AA on cream. */
   main p a { color: var(--accent); text-decoration: underline; }
@@ -241,6 +251,18 @@
 </head>
 <body>
 <a class="skip" href="#main">Ugrás a tartalomra</a>
+<nav class="top-nav" aria-label="Crow Intelligence">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">Crow Intelligence</a>
+    <div class="nav-links">
+      <a href="/portfolio.html">Portfolio</a>
+      <a href="/services.html">Services</a>
+      <a href="/about.html">About</a>
+      <a href="https://blog.crowintelligence.org/">Blog</a>
+      <a href="/contact.html">Contact</a>
+    </div>
+  </div>
+</nav>
 <header>
   <h1>Neked írom a dalt — neked ki is elemzem</h1>
   <p class="subtitle">Diakronikus elemzés évtizedekre bontva</p>
@@ -431,7 +453,7 @@
 </div>
 </main>
 
-<footer>Crow Intelligence · music_networks · statikus dashboard (inline SVG, nincs külső függőség)</footer>
+<footer>Crow Intelligence · <a href="mailto:hello@crowintelligence.org">hello@crowintelligence.org</a> · <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.hu" rel="license">CC BY-NC-SA 4.0</a></footer>
 
 <script>
 const DATA = /*__DATA__*/;
