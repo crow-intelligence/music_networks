@@ -45,6 +45,9 @@ _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
 # The "A projektről" prose lives in this editable text file (single source).
 DEFAULT_METHOD = Path(__file__).with_name("method.txt")
+# Public canonical URL (absolute, needed for Open Graph / canonical / JSON-LD).
+# Deploy the output folder to this path. Trailing slash required.
+SITE_URL = "https://crowintelligence.org/magyar-dalszovegek/"
 
 # Decades below this song count are flagged as statistically thin in the UI.
 LOW_N_SONGS = 50
@@ -370,6 +373,61 @@ def emit_assets(
             cloud = manifest.get(int(row["decade"]))
             if cloud is not None:
                 row["cloud"] = cloud
+
+    render_og_card(assets / "og.png", font_dir=font_dir)
+
+
+def render_og_card(out_path: Path, font_dir: Path = DEFAULT_FONT_DIR) -> None:
+    """Render the 1200×630 social-preview (Open Graph) card to ``out_path``.
+
+    A branded card — cream background, brick accent bar, the headline in the serif
+    display face and the subtitle + brand below — so shared links unfurl nicely.
+
+    Args:
+        out_path: PNG destination (``assets/og.png``).
+        font_dir: Build-only ``.ttf`` directory (PlayfairDisplay + Poppins).
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    title = "Nekem írod a dalt — neked elemzem"
+    subtitle = "A magyar könnyűzene 1950–2026 közötti dalszövegeinek elemzése"
+    brand = "Crow Intelligence · crowintelligence.org"
+
+    width, height, margin = 1200, 630, 96
+    img = Image.new("RGB", (width, height), "#f7f5ef")
+    draw = ImageDraw.Draw(img)
+    draw.rectangle((0, 0, width, 14), fill="#7a1f1f")  # top accent bar
+    title_font = ImageFont.truetype(str(font_dir / "PlayfairDisplay.ttf"), 78)
+    sub_font = ImageFont.truetype(str(font_dir / "Poppins-Regular.ttf"), 33)
+    brand_font = ImageFont.truetype(str(font_dir / "Poppins-Regular.ttf"), 26)
+    max_w = width - 2 * margin
+
+    def wrap(text: str, font: ImageFont.FreeTypeFont) -> list[str]:
+        lines: list[str] = []
+        cur = ""
+        for word in text.split():
+            trial = f"{cur} {word}".strip()
+            if draw.textlength(trial, font=font) <= max_w:
+                cur = trial
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = word
+        if cur:
+            lines.append(cur)
+        return lines
+
+    y = 168
+    for line in wrap(title, title_font):
+        draw.text((margin, y), line, fill="#1a1a17", font=title_font)
+        y += 96
+    y += 18
+    for line in wrap(subtitle, sub_font):
+        draw.text((margin, y), line, fill="#5a5346", font=sub_font)
+        y += 46
+    draw.text((margin, height - 78), brand, fill="#7a1f1f", font=brand_font)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(str(out_path))
 
 
 def render_html(data: dict[str, Any], template: str) -> str:
@@ -855,6 +913,7 @@ def build(
 
     html = render_html(data, _TEMPLATE.read_text(encoding="utf-8"))
     html = html.replace("<!--__METHOD__-->", load_method())
+    html = html.replace("__SITE_URL__", SITE_URL)
     out_path.write_text(html, encoding="utf-8")
     return out_path
 
