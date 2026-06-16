@@ -21,7 +21,9 @@ project + stdlib code (no heavy ML deps), so it stays import-safe.
 
 from __future__ import annotations
 
+import html as _html
 import json
+import re
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -41,6 +43,8 @@ DEFAULT_RHYME_DIR = Path("data/processed/rhyme")
 _TEMPLATE = Path(__file__).with_name("template.html")
 _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
+# The "A projektről" prose lives in this editable text file (single source).
+DEFAULT_METHOD = Path(__file__).with_name("method.txt")
 
 # Decades below this song count are flagged as statistically thin in the UI.
 LOW_N_SONGS = 50
@@ -384,6 +388,66 @@ def render_html(data: dict[str, Any], template: str) -> str:
     """
     blob = json.dumps(data, ensure_ascii=False)
     return template.replace("/*__DATA__*/", blob)
+
+
+# A markdown-style [text](url) link, a bare email, or a bare http(s) URL.
+_LINK = re.compile(
+    r"\[([^\]]+)\]\((https?://[^)\s]+)\)"  # [text](url) — preferred (named link)
+    r"|([\w.+-]+@[\w-]+\.[\w.-]+)"          # email
+    r"|(https?://[^\s<]+)"                  # bare url (fallback)
+)
+
+
+def method_html(text: str) -> str:
+    r"""Render the "A projektről" plain-text body as escaped, linkified ``<p>``s.
+
+    Blank-line-separated paragraphs become ``<p>`` blocks. Links use markdown
+    ``[text](url)`` syntax (rendered with the *text*, not the raw URL); bare
+    emails and URLs are auto-linked. All other text is HTML-escaped.
+
+    Args:
+        text: The ``method.txt`` body (no leading heading line).
+
+    Returns:
+        The paragraphs as HTML (empty string if the text is blank).
+
+    Examples:
+        >>> method_html("egy\n\nkét")
+        '<p>egy</p><p>két</p>'
+        >>> method_html("ld [oldal](http://x)")
+        '<p>ld <a href="http://x" target="_blank" rel="noopener">oldal</a></p>'
+        >>> method_html("info: a@b.hu")
+        '<p>info: <a href="mailto:a@b.hu">a@b.hu</a></p>'
+    """
+
+    def render(mo: re.Match[str]) -> str:
+        label, url, email, bare = mo.group(1), mo.group(2), mo.group(3), mo.group(4)
+        if url is not None:
+            return (f'<a href="{_html.escape(url, quote=True)}" target="_blank" '
+                    f'rel="noopener">{_html.escape(label)}</a>')
+        if email is not None:
+            return f'<a href="mailto:{email}">{_html.escape(email)}</a>'
+        return (f'<a href="{_html.escape(bare, quote=True)}" target="_blank" '
+                f'rel="noopener">{_html.escape(bare)}</a>')
+
+    def linkify(par: str) -> str:
+        out, last = [], 0
+        for mo in _LINK.finditer(par):
+            out.append(_html.escape(par[last : mo.start()]))
+            out.append(render(mo))
+            last = mo.end()
+        out.append(_html.escape(par[last:]))
+        return "".join(out)
+
+    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    return "".join(f"<p>{linkify(p)}</p>" for p in paras)
+
+
+def load_method(path: Path = DEFAULT_METHOD) -> str:
+    """Load the "A projektről" body as HTML (empty string if the file is absent)."""
+    if not path.exists():
+        return ""
+    return method_html(path.read_text(encoding="utf-8"))
 
 
 def load_usage(usage_dir: Path) -> dict[str, Any]:
@@ -790,6 +854,7 @@ def build(
     emit_assets(out_path.parent, keyness, frequency)
 
     html = render_html(data, _TEMPLATE.read_text(encoding="utf-8"))
+    html = html.replace("<!--__METHOD__-->", load_method())
     out_path.write_text(html, encoding="utf-8")
     return out_path
 

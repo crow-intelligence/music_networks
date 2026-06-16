@@ -163,8 +163,10 @@
   .pair-grid h3 { margin: 0 0 2px; }
   .mini-title { font-family: "IM Fell English", Georgia, serif; font-size: 1.05rem; color: var(--ink); margin: 0 0 2px; }
   .pill { display: inline-block; font-size: 0.75rem; border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
+  /* Section intro notes span the full content width (not the narrow prose
+     measure), so every chapter's description reads consistently edge-to-edge. */
+  section > .note { max-width: none; }
   /* §2 word clouds — frequency + distinctive, side by side for one decade */
-  #keyness > .note { max-width: none; }
   .cloud-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--sp-3); align-items: start; }
   .cloud-fig { margin: 0; }
   .cloud-img { width: 100%; height: auto; border: 1px solid var(--line); background: var(--card-bg); border-radius: 3px; }
@@ -414,41 +416,8 @@
   <div id="c-pop-era"></div>
 </section>
 
-<section id="method"><h2>Módszertan</h2>
-  <p>A dalszövegek elsősorban a <strong>zeneszoveg.hu</strong> oldalról származnak,
-    kiegészítve egy Genius-alapú (Kaggle) magyar dalszöveg-gyűjteménnyel. A dalok
-    évtizedekre bontásához a megjelenési évet több forrásból, prioritási sorrendben
-    állítjuk össze: <strong>MusicBrainz</strong> (első megjelenés dátuma és a
-    kompozíció [work] azonosítója, amely a feldolgozásokat is összekapcsolja),
-    <strong>Discogs</strong>, a Genius-évszám, végül a zeneszoveg.hu oldal éve
-    (utóbbi kettő kevésbé megbízható). Az előadói és zeneszerzői metaadatokat
-    <strong>Wikidata</strong> és a magyar Wikipédia egészíti ki.
-    A korpusz nyelvfelismeréssel (magyar) szűrt, MinHash-LSH duplikátum-mentesített;
-    a számláló réteg huspacy lemmákból és gensim n-gramokból épül.
-    A témákat <em>BERTopic</em> adja magyar huBERT beágyazásokkal (128 tokenes
-    ablakokra darabolva, átlagolva), a c-TF-IDF a lemmatizált tokeneken.
-    A téma-elnevezéseket kézzel adtuk a kulcsszavak alapján.
-    A jelentésváltozást a <em>chronowords</em> SVD-beágyazásai mérik, évtizedenként
-    tanítva és Procrustes-igazítással összevetve.
-    A <strong>zenei stílusokat</strong> a <em>Discogs</em> kiadás-adatbázisból nyerjük
-    (előadó+cím egyezésű kiadások leggyakoribb műfaja); a MusicBrainz műfaj-lefedettsége
-    a magyar előadókra gyenge, a Discogsé viszont kiváló.
-    Az <strong>érzelmeket</strong> a
-    <em>visegradmedia-emotion/Emotion_RoBERTa_hungarian6</em> (XLM-RoBERTa) modell
-    osztályozza dalonként, hosszú szövegeknél ablakokra darabolva és átlagolva.</p>
-  <p class="note">A dashboard az 1950-as évektől a 2020-as évekig fedi le az
-    anyagot; a korábbi, ritka évtizedeket elhagytuk. Az 1950-es évek mintája még
-    kicsi (~150 dal), ezt érdemes fenntartással kezelni. A diakronikus modellek
-    főként az 1990-es évektől megbízhatók. A megjelenített mutatók aggregáltak — a
-    dashboard sosem közöl teljes dalszöveget.</p>
-  <p class="note">Korábbi (2020-as) változat:
-    <a href="https://blog.crowintelligence.org/hu/2020/08/19/hatvan-ev-dalszovegei/"
-       target="_blank" rel="noopener">„Ezek minden idők leggyakoribb és legfontosabb
-    szavai a magyar popslágerekben” — Crow Intelligence, 2020</a>.
-    Kapcsolódó kutatás (HuMus): Bodó Z., Szenkovits A. &amp; Pătcaş Cs.,
-    <a href="https://doi.org/10.1007/s44427-026-00030-x" target="_blank" rel="noopener"><em>The
-    HuMus Project: Corpus Compilation and Multi-experiment Study of Hungarian
-    Popular Music Lyrics</em></a>, Acta Universitatis Sapientiae, Informatica (2026).</p>
+<section id="method"><h2>A projektről</h2>
+  <!--__METHOD__-->
 </section>
 <div id="chapterctl" class="chapter-controls">
   <button class="btn" id="prevch" type="button">← Előző</button>
@@ -1784,7 +1753,7 @@ function egoSVG(graph, seed, count) {
     {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "drift", "neighbors"]},
     {id: "halozat", title: "Alkotók", sections: ["collab", "popularity"]},
     {id: "attekintes", title: "Áttekintés", sections: ["overview", "genre"]},
-    {id: "modszertan", title: "Módszertan", sections: ["method"]},
+    {id: "modszertan", title: "A projektről", sections: ["method"]},
   ];
   const track = document.getElementById("chapterbar-track");
   const sections = [...document.querySelectorAll("main > section")];

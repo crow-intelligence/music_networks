@@ -1,0 +1,13 @@
+A dalszövegeket a Kaggle (Genius dataset), Wikidata, Common Crawl adatbázisokból nyertük ki, illetve korábban a zeneszoveg.hu oldalról scrapeltük. Az adatgyűjtés 2026.06.01. és 2026.06.12. között történt.
+
+A metaadatok (megjelenés éve, szerző, előadó, stílus) a MusicBrainz, Discogs, Wikipedia (dbpedia), Wikidata adatbázisokból származnak, illetve a MAHASZ oldalait scrapeltük.
+
+A langdetect csomag segítségével kiszűrtük a nem magyar dalszövegeket, majd MinHash-LSH segítségével kiszűrtük a duplikátumokat. HuSpaCy segítségével dolgoztuk fel a szövegeket (lemmatizálás, tokenizálás, stb.). A topikmodell BERTopic segítségével készült, huBERT beágyazásokkal.
+
+Az érzelemfelismeréshez a MilaNLProc/xlm-emo-t modellt használtuk. A diakrón szóbeágyazásokat a chronowords csomaggal készítettük el.
+
+A projekt korábbi, 2020-as változata a [blogunkon olvasható](https://blog.crowintelligence.org/hu/2020/08/19/hatvan-ev-dalszovegei/): „Ezek minden idők leggyakoribb és legfontosabb szavai a magyar popslágerekben” (2020).
+
+Licenc: [Nevezd meg! – Ne add el! – Így add tovább! 4.0 Nemzetközi (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.hu)
+
+info: hello@crowintelligence.org
