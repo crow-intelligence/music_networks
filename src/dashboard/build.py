@@ -40,6 +40,7 @@ DEFAULT_EMOTION_DIR = Path("data/processed/emotion")
 DEFAULT_GENRE_DIR = Path("data/processed/genre")
 DEFAULT_COLLAB_DIR = Path("data/processed/collab")
 DEFAULT_RHYME_DIR = Path("data/processed/rhyme")
+DEFAULT_PLACES_DIR = Path("data/processed/places")
 _TEMPLATE = Path(__file__).with_name("template.html")
 _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
@@ -264,6 +265,7 @@ def assemble_data(
     rhyme: dict[str, Any] | None = None,
     associations: dict[str, Any] | None = None,
     popularity: dict[str, Any] | None = None,
+    places: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -283,6 +285,7 @@ def assemble_data(
         rhyme: The rhyme-analysis blocks (may be empty/``None``).
         associations: The genre association cross-tabs (may be empty/``None``).
         popularity: The artist popularity/salience blocks (may be empty/``None``).
+        places: The place-name / H3-map blocks (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -314,6 +317,7 @@ def assemble_data(
         "rhyme": rhyme or {},
         "associations": associations or {},
         "popularity": popularity or {},
+        "places": places or {},
     }
 
 
@@ -731,6 +735,20 @@ def load_popularity(db_path: str) -> dict[str, Any]:
     return pop if pop.get("salience") or pop.get("charts") else {}
 
 
+def load_places(places_dir: Path) -> dict[str, Any]:
+    """Load the place-name / H3-map payload (empty if the analysis hasn't run).
+
+    Args:
+        places_dir: Directory with ``places.json`` (see
+            :func:`src.lyrics.places.aggregate`).
+
+    Returns:
+        The map payload ``{"res", "maxCount", "hexes", "outline", "top_places",
+        "by_decade"}``, or ``{}`` if absent.
+    """
+    return _load_json(places_dir / "places.json", {})
+
+
 def load_associations(
     docs: list[Any],
     *,
@@ -793,7 +811,7 @@ def load_associations(
     return out
 
 
-def build(
+def load_all_data(
     *,
     db_path: str = "data/music.db",
     corpus_dir: str = "data/processed/corpus",
@@ -804,9 +822,11 @@ def build(
     genre_dir: Path | str = DEFAULT_GENRE_DIR,
     collab_dir: Path | str = DEFAULT_COLLAB_DIR,
     rhyme_dir: Path | str = DEFAULT_RHYME_DIR,
-    out_path: Path | str = DEFAULT_OUT,
-) -> Path:
-    """Build the dashboard HTML from all cached artifacts.
+    places_dir: Path | str = DEFAULT_PLACES_DIR,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load every cached artifact and assemble the ``DATA`` blob.
+
+    Shared by the dashboard and the scrollytelling essay builders.
 
     Args:
         db_path: SQLite DB for descriptive stats.
@@ -818,20 +838,22 @@ def build(
         genre_dir: Genre artifacts dir (``genre.json``).
         collab_dir: Collaboration-network artifacts dir (``summary.json``).
         rhyme_dir: Rhyme-analysis artifacts dir (``rhyme.json``).
-        out_path: Output HTML path.
+        places_dir: Place-name / H3-map artifacts dir (``places.json``).
 
     Returns:
-        The written HTML path.
+        ``(data, keyness, frequency)``. The keyness/frequency lists are returned
+        alongside ``data`` because :func:`emit_assets` mutates their rows in place
+        (adding ``cloud`` refs) — the same dict refs live inside ``data``, so the
+        caller renders assets *before* serialising ``data``.
     """
     from src.lyrics.corpus import load_corpus
     from src.lyrics.decade_keywords import decade_counts, keywords_by_decade
     from src.lyrics.stats import collect_decade_stats
 
-    topics_dir, usage_dir, networks_dir, out_path = (
+    topics_dir, usage_dir, networks_dir = (
         Path(topics_dir),
         Path(usage_dir),
         Path(networks_dir),
-        Path(out_path),
     )
 
     overview = [
@@ -889,6 +911,7 @@ def build(
         topics_dir=topics_dir,
     )
     popularity = load_popularity(db_path)
+    places = load_places(Path(places_dir))
 
     data = assemble_data(
         overview=overview,
@@ -904,8 +927,56 @@ def build(
         rhyme=rhyme,
         associations=associations,
         popularity=popularity,
+        places=places,
     )
+    return data, keyness, frequency
 
+
+def build(
+    *,
+    db_path: str = "data/music.db",
+    corpus_dir: str = "data/processed/corpus",
+    topics_dir: Path | str = DEFAULT_TOPICS_DIR,
+    usage_dir: Path | str = DEFAULT_USAGE_DIR,
+    networks_dir: Path | str = DEFAULT_NETWORKS_DIR,
+    emotion_dir: Path | str = DEFAULT_EMOTION_DIR,
+    genre_dir: Path | str = DEFAULT_GENRE_DIR,
+    collab_dir: Path | str = DEFAULT_COLLAB_DIR,
+    rhyme_dir: Path | str = DEFAULT_RHYME_DIR,
+    places_dir: Path | str = DEFAULT_PLACES_DIR,
+    out_path: Path | str = DEFAULT_OUT,
+) -> Path:
+    """Build the dashboard HTML from all cached artifacts.
+
+    Args:
+        db_path: SQLite DB for descriptive stats.
+        corpus_dir: Corpus JSONL dir for keyness.
+        topics_dir: Topic artifacts dir.
+        usage_dir: Diachronic-usage artifacts dir.
+        networks_dir: Per-decade word-graph artifacts dir.
+        emotion_dir: Emotion artifacts dir (``emotion.json``).
+        genre_dir: Genre artifacts dir (``genre.json``).
+        collab_dir: Collaboration-network artifacts dir (``summary.json``).
+        rhyme_dir: Rhyme-analysis artifacts dir (``rhyme.json``).
+        places_dir: Place-name / H3-map artifacts dir (``places.json``).
+        out_path: Output HTML path.
+
+    Returns:
+        The written HTML path.
+    """
+    data, keyness, frequency = load_all_data(
+        db_path=db_path,
+        corpus_dir=corpus_dir,
+        topics_dir=topics_dir,
+        usage_dir=usage_dir,
+        networks_dir=networks_dir,
+        emotion_dir=emotion_dir,
+        genre_dir=genre_dir,
+        collab_dir=collab_dir,
+        rhyme_dir=rhyme_dir,
+        places_dir=places_dir,
+    )
+    out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # Render cloud images + copy assets; this annotates keyness/frequency rows in
     # place (shared dict refs in `data`) before the blob is serialised.
@@ -931,6 +1002,7 @@ def main() -> None:
     parser.add_argument("--emotion-dir", default=str(DEFAULT_EMOTION_DIR))
     parser.add_argument("--genre-dir", default=str(DEFAULT_GENRE_DIR))
     parser.add_argument("--collab-dir", default=str(DEFAULT_COLLAB_DIR))
+    parser.add_argument("--places-dir", default=str(DEFAULT_PLACES_DIR))
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     args = parser.parse_args()
 
@@ -943,6 +1015,7 @@ def main() -> None:
         emotion_dir=args.emotion_dir,
         genre_dir=args.genre_dir,
         collab_dir=args.collab_dir,
+        places_dir=args.places_dir,
         out_path=args.out,
     )
     folder = path.parent.resolve()

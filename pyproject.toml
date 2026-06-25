@@ -64,6 +64,10 @@ nlp-ml = [
     "streamlit",
     "plotly",
 ]
+geo = [
+    "h3>=4.5.0",
+    "osmium>=4.3.1",
+]
 
 [dependency-groups]
 dev = [
@@ -152,4 +156,7 @@ testpaths = [
     "src/graphs/collab.py",
     "src/dashboard/build.py",
     "src/dashboard/clouds.py",
+    "src/essay/build.py",
+    "src/lyrics/kwic.py",
+    "src/lyrics/places.py",
 ]

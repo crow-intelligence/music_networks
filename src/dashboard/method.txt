@@ -2,7 +2,7 @@ A dalszövegeket a Kaggle (Genius dataset), Wikidata, Common Crawl adatbázisokb
 
 A metaadatok (megjelenés éve, szerző, előadó, stílus) a MusicBrainz, Discogs, Wikipedia (dbpedia), Wikidata adatbázisokból származnak, illetve a MAHASZ oldalait scrapeltük.
 
-A langdetect csomag segítségével kiszűrtük a nem magyar dalszövegeket, majd MinHash-LSH segítségével kiszűrtük a duplikátumokat. HuSpaCy segítségével dolgoztuk fel a szövegeket (lemmatizálás, tokenizálás, stb.). A topikmodell BERTopic segítségével készült, huBERT beágyazásokkal.
+A langdetect csomag segítségével kiszűrtük a nem magyar dalszövegeket, majd MinHash-LSH segítségével kiszűrtük a duplikátumokat. HuSpaCy segítségével dolgoztuk fel a szövegeket (lemmatizálás, tokenizálás, stb.). A topikmodell BERTopic segítségével készült, huBERT beágyazásokkal. A szókincs változatosságát a MATTR (mozgóablakos típus-token arány) mérőszámmal mértük, a dalok zenei stílusát pedig a Discogs-kiadások alapján határoztuk meg.
 
 Az érzelemfelismeréshez a MilaNLProc/xlm-emo-t modellt használtuk. A diakrón szóbeágyazásokat a chronowords csomaggal készítettük el.
 

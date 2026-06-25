@@ -144,20 +144,20 @@ def chart_ranking(
 
 
 def salience_by_era(
-    rows: list[tuple[float | None, str | None]],
+    rows: list[tuple[float | None, int | None]],
     *,
     min_decade: int = 1950,
     min_artists: int = 8,
 ) -> list[dict[str, Any]]:
-    """Average salience by the artist's birth/formation decade.
+    """Average salience by the artist's debut (first-release) decade.
 
     A rough "which generation is most remembered today" signal: artists are
-    bucketed by the decade of their ``begin_date`` (birth for a person,
-    formation for a group). Decades below ``min_decade`` or with fewer than
-    ``min_artists`` are dropped.
+    bucketed by the decade of their earliest released song/album. Decades below
+    ``min_decade`` or with fewer than ``min_artists`` are dropped.
 
     Args:
-        rows: ``(score, begin_date)`` pairs (``begin_date`` is ``YYYY-…``).
+        rows: ``(score, decade)`` pairs, where ``decade`` is the artist's debut
+            decade (e.g. ``1960``) or ``None`` if undated.
         min_decade: Earliest decade to keep.
         min_artists: Minimum artists for a decade to be reported.
 
@@ -165,18 +165,14 @@ def salience_by_era(
         Rows ``{"decade", "mean_views", "n"}``, decades ascending.
 
     Examples:
-        >>> rows = [(100.0, "1965-01-01"), (300.0, "1968"), (50.0, "1300")]
+        >>> rows = [(100.0, 1960), (300.0, 1960), (50.0, 1300), (10.0, None)]
         >>> salience_by_era(rows, min_artists=2)
         [{'decade': 1960, 'mean_views': 200, 'n': 2}]
     """
     buckets: dict[int, list[float]] = defaultdict(list)
-    for score, begin in rows:
-        if not score or not begin:
+    for score, decade in rows:
+        if not score or not decade:
             continue
-        head = begin[:4]
-        if not head.isdigit():
-            continue
-        decade = year_to_decade(int(head))
         if decade >= min_decade:
             buckets[decade].append(float(score))
     out = []
@@ -203,18 +199,40 @@ def build_popularity(db_path: str = "data/music.db") -> dict[str, Any]:
         ``{"salience": [...], "charts": [...], "era": [...]}`` (empty lists if the
         enrichment hasn't run).
     """
-    from sqlalchemy import select
+    from sqlalchemy import func, select
 
-    from src.db import Artist, ChartEntry, get_engine, make_session
+    from src.db import (
+        Artist,
+        ChartEntry,
+        Performer,
+        Song,
+        SongPerformer,
+        get_engine,
+        make_session,
+    )
 
     engine = get_engine(db_path)
     try:
         with make_session(engine)() as session:
             artists = session.execute(
                 select(
-                    Artist.name, Artist.avg_monthly_pageviews, Artist.begin_date
+                    Artist.id, Artist.name, Artist.avg_monthly_pageviews
                 ).where(Artist.avg_monthly_pageviews.is_not(None))
             ).all()
+            # Per-artist debut year = earliest release across their songs, using the
+            # project's dating policy (authoritative first_release_year preferred,
+            # else the scraped Song.year — same COALESCE the overview SQL uses).
+            best_year = func.coalesce(Song.first_release_year, Song.year)
+            debut = dict(
+                session.execute(
+                    select(Performer.artist_id, func.min(best_year))
+                    .join(SongPerformer, SongPerformer.performer_id == Performer.id)
+                    .join(Song, Song.id == SongPerformer.song_id)
+                    .where(Performer.artist_id.is_not(None))
+                    .where(best_year.is_not(None))
+                    .group_by(Performer.artist_id)
+                ).all()
+            )
             charts = session.execute(
                 select(ChartEntry.artist_raw, ChartEntry.rank).where(
                     ChartEntry.performer_id.is_not(None)
@@ -223,8 +241,12 @@ def build_popularity(db_path: str = "data/music.db") -> dict[str, Any]:
     finally:
         engine.dispose()
 
+    def debut_decade(aid: int) -> int | None:
+        year = debut.get(aid)
+        return (year_to_decade(int(year)) or None) if year else None
+
     return {
-        "salience": salience_ranking([(n, v) for n, v, _ in artists]),
+        "salience": salience_ranking([(n, v) for _, n, v in artists]),
         "charts": chart_ranking([(n, r) for n, r in charts]),
-        "era": salience_by_era([(v, b) for _, v, b in artists]),
+        "era": salience_by_era([(v, debut_decade(aid)) for aid, _, v in artists]),
     }
