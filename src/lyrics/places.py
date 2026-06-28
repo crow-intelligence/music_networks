@@ -40,6 +40,13 @@ DEFAULT_PBF = Path("data/misc/hungary-latest.osm.pbf")
 PBF_URL = "https://download.geofabrik.de/europe/hungary-latest.osm.pbf"
 DEFAULT_BLOCKLIST = Path("data/misc/place_blocklist.txt")
 DEFAULT_OUTLINE = Path("data/misc/hungary.geojson")
+# Curated gazetteers merged on top of the OSM settlements (gitignored, like the
+# blocklist): Hungarian geographic features (lakes/rivers/regions — on the map) and
+# foreign places (countries/cities — ranked list only, no coords).
+DEFAULT_GEO = Path("data/misc/places_geo.json")
+DEFAULT_FOREIGN = Path("data/misc/places_foreign.json")
+# A place whose `kind` is one of these is "foreign" — listed, not put on the HU map.
+FOREIGN_KINDS = frozenset({"ország", "város"})
 
 # OSM ``place`` values we keep — settlements only. Streets/squares (the user's
 # renamed edge cases — Moszkva tér, Vöröskatona utca) and Budapest-internal
@@ -216,11 +223,14 @@ def build_index(
         name = (e.get("name") or "").strip()
         if not name or len(name) < min_len:
             continue
-        place = e.get("place")
-        if place not in PLACE_TYPES:
-            continue
-        if place not in KEEP_ALWAYS and (e.get("pop") or 0) < min_village_pop:
-            continue
+        # Curated entries (geographic features / foreign places) bypass the OSM
+        # place-type + village-population gates; min-length + blocklist still apply.
+        if not e.get("curated"):
+            place = e.get("place")
+            if place not in PLACE_TYPES:
+                continue
+            if place not in KEEP_ALWAYS and (e.get("pop") or 0) < min_village_pop:
+                continue
         toks = tokenize(name)
         if not toks:
             continue
@@ -232,9 +242,10 @@ def build_index(
                 continue
         gaz.places[key] = {
             "name": name,
-            "lat": float(e["lat"]),
-            "lon": float(e["lon"]),
+            "lat": float(e.get("lat") or 0.0),
+            "lon": float(e.get("lon") or 0.0),
             "pop": e.get("pop") or 0,
+            "kind": e.get("kind") or "település",
         }
     # Build the matchers from the surviving places.
     for key in gaz.places:
@@ -461,6 +472,8 @@ def aggregate(
     places_dir: Path = DEFAULT_PLACES_DIR,
     blocklist_path: Path = DEFAULT_BLOCKLIST,
     outline_path: Path = DEFAULT_OUTLINE,
+    geo_path: Path = DEFAULT_GEO,
+    foreign_path: Path = DEFAULT_FOREIGN,
     res: int = H3_RES,
 ) -> Path:
     """Match the gazetteer over the corpus, H3-bin mentions, write ``places.json``."""
@@ -468,19 +481,30 @@ def aggregate(
 
     from src.lyrics.corpus import load_corpus
 
+    # Settlements (OSM) + curated geographic features + curated foreign places, all
+    # in one index → one corpus pass; split afterwards by `kind`.
     entries = json.loads((places_dir / "gazetteer.json").read_text(encoding="utf-8"))
+    for curated_path in (geo_path, foreign_path):
+        if curated_path.exists():
+            for e in json.loads(curated_path.read_text(encoding="utf-8")):
+                entries.append({**e, "curated": True})
     gaz = build_index(entries, blocklist=_load_blocklist(blocklist_path))
     docs = load_corpus(corpus_dir)
     overall, by_decade = count_corpus(docs, gaz)
     if not overall:
         raise SystemExit("No place mentions found — check the gazetteer/corpus.")
 
-    # H3 binning.
+    def is_foreign(key: str) -> bool:
+        return gaz.places[key].get("kind") in FOREIGN_KINDS
+
+    # H3 binning — HU places only (foreign places have no real coordinates).
     cell_total: Counter[str] = Counter()
     cell_names: dict[str, Counter[str]] = defaultdict(Counter)
     cell_dec: dict[str, Counter[int]] = defaultdict(Counter)
     cell_of: dict[str, str] = {}
     for key, cnt in overall.items():
+        if is_foreign(key):
+            continue
         p = gaz.places[key]
         cell = h3.latlng_to_cell(p["lat"], p["lon"], res)
         cell_of[key] = cell
@@ -488,7 +512,8 @@ def aggregate(
         cell_names[cell][p["name"]] += cnt
     for dec, ctr in by_decade.items():
         for key, cnt in ctr.items():
-            cell_dec[cell_of[key]][dec] += cnt
+            if key in cell_of:
+                cell_dec[cell_of[key]][dec] += cnt
 
     # Projection centred on the mentioned-cell bounding box.
     cents = {c: h3.cell_to_latlng(c) for c in cell_total}
@@ -512,29 +537,43 @@ def aggregate(
             }
         )
 
+    hu_ranked = [(k, c) for k, c in overall.most_common() if not is_foreign(k)]
+    foreign_ranked = [(k, c) for k, c in overall.most_common() if is_foreign(k)]
+
+    def row(k: str, c: int) -> dict[str, Any]:
+        p = gaz.places[k]
+        return {"name": p["name"], "kind": p["kind"], "count": c}
+
     payload = {
         "res": res,
         "maxCount": max(cell_total.values()),
         "hexes": hexes,
         "outline": _load_outline(outline_path, lat0, lon0),
-        "top_places": [
-            {"name": gaz.places[k]["name"], "count": c}
-            for k, c in overall.most_common(40)
-        ],
+        "top_places": [row(k, c) for k, c in hu_ranked[:40]],
         "by_decade": [
-            {"decade": d, "n": int(sum(ctr.values()))}
+            {"decade": d, "n": int(sum(c for k, c in ctr.items() if not is_foreign(k)))}
             for d, ctr in sorted(by_decade.items())
         ],
+        "foreign": {
+            "top": [row(k, c) for k, c in foreign_ranked[:40]],
+            "by_decade": [
+                {"decade": d, "n": int(sum(c for k, c in ctr.items() if is_foreign(k)))}
+                for d, ctr in sorted(by_decade.items())
+            ],
+        },
     }
     places_dir.mkdir(parents=True, exist_ok=True)
     out = places_dir / "places.json"
     out.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     print(
-        f"Places: {len(overall)} distinct, {sum(overall.values())} mentions, "
-        f"{len(hexes)} H3 cells (res {res}) → {out}"
+        f"Places: {len(hu_ranked)} HU + {len(foreign_ranked)} foreign distinct, "
+        f"{sum(overall.values())} mentions, {len(hexes)} H3 cells (res {res}) → {out}"
     )
-    top15 = ", ".join(f"{p['name']}({p['count']})" for p in payload["top_places"][:15])
-    print("Top 15:", top15)
+    def fmt(rows: list[dict[str, Any]]) -> str:
+        return ", ".join(f"{p['name']}({p['count']})" for p in rows[:15])
+
+    print("Top HU:", fmt(payload["top_places"]))
+    print("Top foreign:", fmt(payload["foreign"]["top"]))
     return out
 
 

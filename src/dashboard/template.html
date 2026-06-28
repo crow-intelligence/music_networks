@@ -462,12 +462,17 @@
 </section>
 
 <section id="places"><h2>Helyek a dalokban</h2>
-  <p class="note">Mely magyar települések bukkannak fel a dalszövegekben? A neveket egy
-    OpenStreetMap-alapú településnévtárral kerestük meg a szövegekben.</p>
+  <p class="note">Mely magyar települések, tájak és vizek bukkannak fel a
+    dalszövegekben? A neveket egy OpenStreetMap-alapú helynévtárral kerestük meg a
+    szövegekben.</p>
   <div id="c-places-controls" class="controls"></div>
   <div id="c-places"></div>
   <h3>A leggyakrabban említett helyek</h3>
   <div id="c-places-list"></div>
+  <h3>Külföldi helyek a dalokban</h3>
+  <p class="note">Mely országok és külföldi városok jelennek meg a magyar
+    dalszövegekben?</p>
+  <div id="c-places-foreign"></div>
 </section>
 
 <section id="method"><h2>A projektről</h2>
@@ -1807,9 +1812,17 @@ function barList(host, rows, opts = {}) {
         "(python -m src.lyrics.places aggregate).");
       return;
     }
+    const huLabel = r => (r.kind && r.kind !== "település") ? `${r.name} (${r.kind})` : r.name;
     barList(document.getElementById("c-places-list"),
-      (P.top_places || []).slice(0, 25).map(r => ({label: r.name, value: r.count})),
+      (P.top_places || []).slice(0, 25).map(r => ({label: huLabel(r), value: r.count})),
       {fmt: v => v + " említés", color: cssVar("--c7")});
+    const foreign = (P.foreign && P.foreign.top) || [];
+    if (foreign.length) {
+      barList(document.getElementById("c-places-foreign"),
+        foreign.slice(0, 25).map(r => ({label: r.name, value: r.count, tip:
+          `<b>${r.name}</b> (${r.kind})<br>${r.count} említés`})),
+        {fmt: v => v + " említés", color: cssVar("--c4")});
+    } else empty("c-places-foreign", "Nincs adat.");
 
     const ctrls = document.getElementById("c-places-controls");
     const sel = document.createElement("select");
