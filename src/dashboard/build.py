@@ -382,14 +382,10 @@ def emit_assets(
             if cloud is not None:
                 row["cloud"] = cloud
 
-    # Copy the cached allotaxonograph PNGs (rendered by src.lyrics.allotax).
-    if DEFAULT_ALLOTAX_DIR.is_dir():
-        dst_allotax = assets / "allotax"
-        if dst_allotax.exists():
-            shutil.rmtree(dst_allotax)
-        dst_allotax.mkdir(parents=True, exist_ok=True)
-        for png in DEFAULT_ALLOTAX_DIR.glob("*.png"):
-            shutil.copy2(png, dst_allotax / png.name)
+    # NB: the allotaxonograph is now drawn client-side from the inlined
+    # `DATA.allotax.data` (rank-turbulence divergence from keyflux), so the static
+    # PNGs are no longer shipped — `src.lyrics.allotax --png` still exports them for
+    # offline/report use under data/processed/allotax/.
 
     render_og_card(assets / "og.png", font_dir=font_dir)
 
@@ -774,12 +770,20 @@ def load_allotax(allotax_dir: Path) -> dict[str, Any]:
     """
     if not allotax_dir.is_dir():
         return {}
+    data = _load_json(allotax_dir / "allotax_data.json", {})
     decades: set[int] = set()
     for png in allotax_dir.glob("*_*.png"):
         for part in png.stem.split("_"):
             if part.isdigit() and int(part) >= MIN_DECADE:
                 decades.add(int(part))
-    return {"decades": sorted(decades), "alpha": "1/3"} if decades else {}
+    if not decades and data:
+        for key in data:
+            for part in key.split("_"):
+                if part.isdigit() and int(part) >= MIN_DECADE:
+                    decades.add(int(part))
+    if not decades:
+        return {}
+    return {"decades": sorted(decades), "alpha": "1/3", "data": data}
 
 
 def load_associations(

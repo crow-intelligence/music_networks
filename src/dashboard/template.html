@@ -250,6 +250,9 @@
   .allotax-img { width: 100%; height: auto; max-width: 1000px; display: block;
     margin: var(--sp-2) 0; border: 1px solid var(--line); border-radius: 4px;
     background: var(--card-bg); }
+  .allotax-svg { width: 100%; height: auto; max-width: 1000px; display: block;
+    margin: var(--sp-2) 0; }
+  .allotax-svg circle { cursor: help; }
   .allotax-cap { color: var(--muted); font-style: italic; font-size: var(--fs-caption); }
   /* Reusable horizontal bar list — x-axis scale under the bars, exact value on
      hover (instead of cramped end labels). */
@@ -1909,44 +1912,94 @@ function barList(host, rows, opts = {}) {
     sel.addEventListener("change", () => draw(sel.value));
   })();
 
-  // Két évtized összevetése — allotaxonográf (keyflux) PNG-k, tetszőleges párra.
+  // Két évtized összevetése — interaktív allotaxonográf, a keyflux rtd-adataiból
+  // rajzolva (rang-rang rombusz + a legnagyobb eltolódású szavak). Tetszőleges pár.
   (function () {
     const A = DATA.allotax || {};
     const decs = A.decades || [];
+    const data = A.data || {};
     const host = document.getElementById("c-allotax");
-    if (decs.length < 2) {
+    if (decs.length < 2 || !Object.keys(data).length) {
       empty("c-allotax", "Nincs adat — előbb futtasd: python -m src.lyrics.allotax");
       return;
     }
     const ctrls = document.getElementById("c-allotax-controls");
     const mkSel = init => {
-      const s = document.createElement("select");
-      s.setAttribute("aria-label", "Évtized kiválasztása");
-      s.innerHTML = decs.map(d =>
+      const sel = document.createElement("select");
+      sel.setAttribute("aria-label", "Évtized kiválasztása");
+      sel.innerHTML = decs.map(d =>
         `<option value="${d}"${d === init ? " selected" : ""}>${decadeLabel(d)}</option>`
       ).join("");
-      return s;
+      return sel;
     };
-    const selA = mkSel(decs[0]);
-    const selB = mkSel(decs[decs.length - 1]);
-    const vs = document.createElement("span");
-    vs.className = "allotax-vs"; vs.textContent = "↔";
-    ctrls.append(selA, vs, selB);
-    const img = document.createElement("img"); img.className = "allotax-img";
-    const cap = document.createElement("p"); cap.className = "allotax-cap";
-    host.append(img, cap);
+    const selA = mkSel(decs[0]), selB = mkSel(decs[decs.length - 1]);
+    const vs = document.createElement("span"); vs.className = "allotax-vs";
+    vs.textContent = "↔"; ctrls.append(selA, vs, selB);
+    const COL = {"-1": cssVar("--c4", "#34568b"), "0": cssVar("--ctx", "#b6b0a2"),
+      "1": cssVar("--c1", "#7a1f1f")};
+    const col = d => COL[String(d)] || COL["0"];
+
+    function render(lo, hi) {
+      host.innerHTML = "";
+      const pair = data[lo + "_" + hi];
+      if (!pair) { empty("c-allotax", "Nincs adat ehhez a párhoz."); return; }
+      const words = pair.words || [], loL = decadeLabel(lo), hiL = decadeLabel(hi);
+      const W = 960, H = 560;
+      const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, class: "allotax-svg", role: "img",
+        "aria-label": `${loL} és ${hiL} szóhasználatának összevetése (allotaxonográf).`});
+      // --- rank-rank diamond ---
+      const cx = 250, top = 40, R = 208;
+      const Mlog = Math.max(1, ...words.map(o => Math.log10(Math.max(o.r1, o.r2))));
+      const X = (u, v) => cx + (u - v) / (2 * Mlog) * (2 * R);
+      const Y = (u, v) => top + (u + v) / (2 * Mlog) * (2 * R);
+      const V = [[cx, top], [cx + R, top + R], [cx, top + 2 * R], [cx - R, top + R]];
+      svg.appendChild(s("polygon", {points: V.map(p => p.join(",")).join(" "),
+        fill: "var(--card-bg)", stroke: "var(--line)", "stroke-width": 1}));
+      svg.appendChild(s("line", {x1: cx, y1: top, x2: cx, y2: top + 2 * R,
+        stroke: "var(--line)", "stroke-dasharray": "3 4"}));
+      svg.appendChild(s("text", {x: cx, y: top - 12, "text-anchor": "middle",
+        "font-size": 12, fill: "var(--muted)"}, "mindkettőben gyakori"));
+      svg.appendChild(s("text", {x: cx, y: top + 2 * R + 22, "text-anchor": "middle",
+        "font-size": 12, fill: "var(--muted)"}, "mindkettőben ritka"));
+      svg.appendChild(s("text", {x: cx - R, y: top + R - 12, "text-anchor": "middle",
+        "font-size": 13, "font-weight": 700, fill: col(-1)}, "◀ " + loL));
+      svg.appendChild(s("text", {x: cx + R, y: top + R - 12, "text-anchor": "middle",
+        "font-size": 13, "font-weight": 700, fill: col(1)}, hiL + " ▶"));
+      const maxc = Math.max(...words.map(o => o.c), 1e-9);
+      words.slice().sort((a, b) => a.c - b.c).forEach(o => {
+        const u = Math.log10(o.r1), v = Math.log10(o.r2);
+        const c = s("circle", {cx: X(u, v).toFixed(1), cy: Y(u, v).toFixed(1),
+          r: (2.4 + Math.sqrt(o.c / maxc) * 7).toFixed(1), fill: col(o.d),
+          "fill-opacity": 0.82, stroke: "rgba(0,0,0,.15)", "stroke-width": 0.5});
+        bindTip(c, `<b>${o.w.replace(/_/g, " ")}</b><br>${loL}: #${o.r1} · ${hiL}: #${o.r2}`);
+        svg.appendChild(c);
+      });
+      // --- word-shift bars ---
+      const bx = 740, bTop = 46, rowH = 21, nBars = 22, bw = 116;
+      svg.appendChild(s("text", {x: bx, y: 26, "text-anchor": "middle", "font-size": 12.5,
+        fill: "var(--ink)"}, "A legnagyobb eltolódású szavak"));
+      svg.appendChild(s("line", {x1: bx, y1: bTop - 6, x2: bx, y2: bTop + nBars * rowH,
+        stroke: "var(--line)"}));
+      const bars = words.slice().sort((a, b) => b.c - a.c).slice(0, nBars);
+      const bmax = Math.max(...bars.map(o => o.c), 1e-9);
+      bars.forEach((o, i) => {
+        const y = bTop + i * rowH, dir = o.d >= 0 ? 1 : -1, len = (o.c / bmax) * bw;
+        svg.appendChild(s("rect", {x: (dir > 0 ? bx : bx - len).toFixed(1), y: y,
+          width: len.toFixed(1), height: 13, rx: 2, fill: col(o.d), "fill-opacity": 0.85}));
+        svg.appendChild(s("text", {x: (bx + dir * (len + 5)).toFixed(1), y: y + 11,
+          "text-anchor": dir > 0 ? "start" : "end", "font-size": 12, fill: "var(--body)"},
+          o.w.replace(/_/g, " ").slice(0, 16)));
+      });
+      host.appendChild(svg);
+      const cap = document.createElement("p"); cap.className = "allotax-cap";
+      cap.innerHTML = `Rangfordulat-divergencia: <b>${pair.div}</b> — balra a(z) ${loL}, ` +
+        `jobbra a(z) ${hiL} felé jellemzőbb szavak. Vidd az egeret a pontok fölé a szóért!`;
+      host.appendChild(cap);
+    }
     function draw() {
       const x = +selA.value, y = +selB.value;
-      if (x === y) {
-        img.style.display = "none";
-        cap.textContent = "Válassz két különböző évtizedet.";
-        return;
-      }
-      const lo = Math.min(x, y), hi = Math.max(x, y);
-      img.style.display = "";
-      img.src = "assets/allotax/" + lo + "_" + hi + ".png";
-      img.alt = "Allotaxonográf: " + decadeLabel(lo) + " ↔ " + decadeLabel(hi);
-      cap.textContent = "";
+      if (x === y) { empty("c-allotax", "Válassz két különböző évtizedet."); return; }
+      render(Math.min(x, y), Math.max(x, y));
     }
     selA.addEventListener("change", draw);
     selB.addEventListener("change", draw);

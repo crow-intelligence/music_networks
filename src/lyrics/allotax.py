@@ -12,8 +12,10 @@ Run: ``python -m src.lyrics.allotax`` (re-run when the corpus changes).
 
 from __future__ import annotations
 
+import json
 from itertools import combinations
 from pathlib import Path
+from typing import Any
 
 DEFAULT_ALLOTAX_DIR = Path("data/processed/allotax")
 DEFAULT_CORPUS_DIR = "data/processed/corpus"
@@ -90,15 +92,73 @@ def build_allotax(
     return decades
 
 
+def export_data(
+    corpus_dir: str = DEFAULT_CORPUS_DIR,
+    out_dir: Path | str = DEFAULT_ALLOTAX_DIR,
+    *,
+    alpha: float = ALPHA,
+    min_decade: int = MIN_DECADE,
+    top: int = 160,
+) -> Path:
+    """Export per-decade-pair rank-turbulence-divergence data → ``allotax_data.json``.
+
+    For the interactive (HTML+JS) allotaxonograph: for each unordered decade pair,
+    the ``top`` words by divergence contribution, each with its rank in the earlier
+    (``r1``) and later (``r2``) decade, its contribution, and its side (``d``: -1 =
+    earlier-favoured, +1 = later-favoured, 0 = shared).
+    """
+    from keyflux import RankedList, rtd
+
+    from src.lyrics.corpus import load_corpus
+    from src.lyrics.decade_keywords import decade_counts
+
+    counts = decade_counts(load_corpus(corpus_dir))
+    decades = sorted(d for d in counts if d >= min_decade)
+    ranked = {d: RankedList.from_counts(counts[d]) for d in decades}
+    dside = {"system1": -1, "system2": 1, "shared": 0}
+    pairs: dict[str, Any] = {}
+    for lo, hi in combinations(decades, 2):
+        res = rtd(ranked[lo], ranked[hi], alpha=alpha)  # list1=lo (earlier)
+        rows = sorted(res.contributions, key=lambda c: -abs(c.contribution))[:top]
+        pairs[f"{lo}_{hi}"] = {
+            "div": round(res.divergence, 4),
+            "lo": lo,
+            "hi": hi,
+            "words": [
+                {
+                    "w": c.type,
+                    "r1": round(c.rank1),
+                    "r2": round(c.rank2),
+                    "c": round(c.contribution, 6),
+                    "d": dside.get(c.direction, 0),
+                }
+                for c in rows
+            ],
+        }
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "allotax_data.json"
+    path.write_text(json.dumps(pairs, ensure_ascii=False), encoding="utf-8")
+    print(f"Allotax data: {len(pairs)} pairs × top {top} words → {path}")
+    return path
+
+
 def main() -> None:
-    """CLI: ``python -m src.lyrics.allotax``."""
+    """CLI: ``python -m src.lyrics.allotax`` — writes the interactive data JSON.
+
+    The dashboard draws the allotaxonograph client-side from this JSON. Pass
+    ``--png`` to also render the (offline) static allotaxonometer PNGs.
+    """
     import argparse
 
-    ap = argparse.ArgumentParser(description="Render per-decade-pair allotaxonographs.")
+    ap = argparse.ArgumentParser(description="Export per-decade-pair allotaxonometry.")
     ap.add_argument("--corpus-dir", default=DEFAULT_CORPUS_DIR)
     ap.add_argument("--out-dir", default=str(DEFAULT_ALLOTAX_DIR))
+    ap.add_argument("--png", action="store_true", help="also render static PNGs")
     args = ap.parse_args()
-    build_allotax(args.corpus_dir, Path(args.out_dir))
+    export_data(args.corpus_dir, Path(args.out_dir))
+    if args.png:
+        build_allotax(args.corpus_dir, Path(args.out_dir))
 
 
 if __name__ == "__main__":
