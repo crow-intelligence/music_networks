@@ -13,7 +13,7 @@ _terms = st.lists(
     st.fixed_dictionaries(
         {
             "term": st.text(alphabet="abcdef_", min_size=1, max_size=6),
-            "log_likelihood": st.floats(
+            "score": st.floats(
                 min_value=0.0, max_value=1e4, allow_nan=False, allow_infinity=False
             ),
         }
@@ -36,7 +36,7 @@ def test_cloud_weights_invariants(terms, word_count):
     # zero scores dropped, last write wins on a display-key collision.
     expected: dict[str, float] = {}
     for t in terms[:word_count]:
-        score = t["log_likelihood"]
+        score = t["score"]
         if score > 0:
             expected[t["term"].replace("_", " ")] = math.sqrt(score)
     assert w.keys() == expected.keys()

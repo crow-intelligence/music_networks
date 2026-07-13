@@ -58,12 +58,12 @@ def cloud_weights(
     terms: list[dict[str, Any]],
     word_count: int = 40,
     *,
-    weight_key: str = "log_likelihood",
+    weight_key: str = "score",
 ) -> dict[str, float]:
     """Map the top terms to word-cloud weights via a ``sqrt`` scale.
 
     Font area in the cloud scales with the weight, so taking ``sqrt`` of the
-    underlying score (the G² log-likelihood for *distinctive* clouds, or the raw
+    underlying score (the keyness score for *distinctive* clouds, or the raw
     frequency for *most-frequent* clouds) keeps the strongest word from dwarfing
     the rest. ``_`` joins in n-gram lemmas are turned back into spaces for display.
 
@@ -71,8 +71,8 @@ def cloud_weights(
         terms: Per-decade term dicts (``term`` + the ``weight_key`` field),
             strongest first, as produced by the dashboard build blocks.
         word_count: How many top terms to include.
-        weight_key: The term field to weight by (``"log_likelihood"`` for
-            keyness, ``"freq"`` for raw frequency).
+        weight_key: The term field to weight by (``"score"`` for keyness,
+            ``"freq"`` for raw frequency).
 
     Returns:
         Mapping of display term → positive weight, suitable for
@@ -80,8 +80,8 @@ def cloud_weights(
 
     Examples:
         >>> w = cloud_weights(
-        ...     [{"term": "szív", "log_likelihood": 100.0},
-        ...      {"term": "nagy_szerelem", "log_likelihood": 25.0}],
+        ...     [{"term": "szív", "score": 100.0},
+        ...      {"term": "nagy_szerelem", "score": 25.0}],
         ...     word_count=40)
         >>> sorted(w)
         ['nagy szerelem', 'szív']
@@ -115,7 +115,7 @@ def render_clouds(
     *,
     font_dir: Path | str,
     word_count: int = 40,
-    weight_key: str = "log_likelihood",
+    weight_key: str = "score",
     prefix: str = "decade_",
     width: int = 900,
     height: int = 460,
@@ -129,7 +129,7 @@ def render_clouds(
         out_dir: Directory the PNGs are written to (created if absent).
         font_dir: Build-only directory holding the era ``.ttf`` files.
         word_count: Max words per cloud (default 40).
-        weight_key: Term field driving font size (``"log_likelihood"`` for the
+        weight_key: Term field driving font size (``"score"`` for the
             distinctive cloud, ``"freq"`` for the most-frequent cloud).
         prefix: Output filename prefix; the file is ``<prefix><decade>.png`` so
             the two cloud sets (e.g. ``decade_`` and ``freq_decade_``) coexist.

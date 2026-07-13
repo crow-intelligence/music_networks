@@ -890,6 +890,19 @@ wheels = [
 ]
 
 [[package]]
+name = "keyflux"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8d/33/2574458ba96b7b2d397a5d296f2c6f2b530d9d08e09eb07908b05ec4bdde/keyflux-0.2.0.tar.gz", hash = "sha256:589e3a5e8c3cdd6843ac36836a16e12b05f2b1755225db15ae24f6ce1c6a9d0e", size = 24946, upload-time = "2026-07-01T12:53:32.79Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c8/f4/47f531c2bfaef85aaadee54e6f0b3bfa6898aa24f40de6d566c15044eeb3/keyflux-0.2.0-py3-none-any.whl", hash = "sha256:e82317f2449570b5a7033fc738d6c46a2034107edd4df97bab99a0c1c18125fe", size = 32472, upload-time = "2026-07-01T12:53:31.631Z" },
+]
+
+[[package]]
 name = "kiwisolver"
 version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1124,6 +1137,7 @@ dependencies = [
     { name = "gensim" },
     { name = "httpx" },
     { name = "kenon" },
+    { name = "keyflux" },
     { name = "langdetect" },
     { name = "lxml" },
     { name = "matplotlib" },
@@ -1193,6 +1207,7 @@ requires-dist = [
     { name = "hu-core-news-lg", marker = "extra == 'nlp'", url = "https://huggingface.co/huspacy/hu_core_news_lg/resolve/main/hu_core_news_lg-3.8.1-py3-none-any.whl" },
     { name = "huspacy", marker = "extra == 'nlp'" },
     { name = "kenon", specifier = ">=0.1.1" },
+    { name = "keyflux", specifier = ">=0.2.0" },
     { name = "langdetect" },
     { name = "lxml" },
     { name = "matplotlib" },

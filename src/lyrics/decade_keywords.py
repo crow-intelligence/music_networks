@@ -85,13 +85,14 @@ class Keyword:
 
     Attributes:
         term: The (lemmatized, possibly n-gram) term.
-        log_likelihood: G² significance vs the rest of the corpus.
+        score: The keyness score vs the rest of the corpus (Simple Maths, via
+            keyflux — a modern, frequency-aware keyness measure).
         log_ratio: Effect size (positive = over-represented this decade).
         freq: Raw frequency in the decade.
     """
 
     term: str
-    log_likelihood: float
+    score: float
     log_ratio: float
     freq: int
 
@@ -146,7 +147,7 @@ def keyness(
         if lr <= 0:
             continue
         keywords.append(Keyword(term, log_likelihood(a, b, c, d), lr, a))
-    keywords.sort(key=lambda k: k.log_likelihood, reverse=True)
+    keywords.sort(key=lambda k: k.score, reverse=True)
     return keywords[:top_n] if top_n is not None else keywords
 
 
@@ -155,14 +156,23 @@ def keywords_by_decade(
 ) -> dict[int, list[Keyword]]:
     """Compute distinctive keywords for every decade (vs the rest of the corpus).
 
+    Keyness is computed with the **keyflux** package using the modern **Simple Maths**
+    measure (Kilgarriff 2009 — frequency-aware, robust for keyword lists), each
+    decade's counts scored against the rest-of-corpus reference. Only over-represented
+    ("positive") terms are kept, ranked by descending keyness score. (The pure
+    :func:`keyness`/:func:`log_likelihood`/:func:`log_ratio` helpers above are a
+    log-likelihood reference implementation, kept doctested.)
+
     Args:
         docs: The Phase-0 corpus.
-        min_freq: Minimum target frequency per term.
+        min_freq: Minimum target (focus) frequency per term.
         top_n: Keywords kept per decade.
 
     Returns:
         ``decade -> list[Keyword]`` (each list ranked by log-likelihood).
     """
+    from keyflux import Keyness
+
     counts = decade_counts(docs)
     totals: Counter = Counter()
     for counter in counts.values():
@@ -170,7 +180,23 @@ def keywords_by_decade(
     result: dict[int, list[Keyword]] = {}
     for decade, target in counts.items():
         reference = totals - target  # rest-of-corpus counts
-        result[decade] = keyness(target, reference, min_freq=min_freq, top_n=top_n)
+        rows = Keyness(
+            target,
+            reference,
+            measure="simple_maths",
+            min_focus_freq=min_freq,
+            min_reference_freq=0,
+        ).keywords(top=None).positive()
+        rows.sort(key=lambda r: r.score, reverse=True)
+        result[decade] = [
+            Keyword(
+                term=r.type,
+                score=r.score,
+                log_ratio=r.effect_size,
+                freq=r.focus_count,
+            )
+            for r in rows[:top_n]
+        ]
     return result
 
 
@@ -187,10 +213,10 @@ def main() -> None:
     for decade, keywords in sorted(by_decade.items()):
         path = DEFAULT_KEYWORDS_DIR / f"decade_{decade}.tsv"
         with path.open("w", encoding="utf-8") as handle:
-            handle.write("term\tlog_likelihood\tlog_ratio\tfreq\n")
+            handle.write("term\tscore\tlog_ratio\tfreq\n")
             for kw in keywords:
                 handle.write(
-                    f"{kw.term}\t{kw.log_likelihood:.4f}\t{kw.log_ratio:.4f}\t{kw.freq}\n"
+                    f"{kw.term}\t{kw.score:.4f}\t{kw.log_ratio:.4f}\t{kw.freq}\n"
                 )
         print(f"  {decade}s : {len(keywords)} keywords -> {path}")
 

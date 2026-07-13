@@ -41,6 +41,7 @@ DEFAULT_GENRE_DIR = Path("data/processed/genre")
 DEFAULT_COLLAB_DIR = Path("data/processed/collab")
 DEFAULT_RHYME_DIR = Path("data/processed/rhyme")
 DEFAULT_PLACES_DIR = Path("data/processed/places")
+DEFAULT_ALLOTAX_DIR = Path("data/processed/allotax")
 _TEMPLATE = Path(__file__).with_name("template.html")
 _ASSETS_SRC = Path(__file__).with_name("assets")
 DEFAULT_FONT_DIR = _ASSETS_SRC / "build-fonts"
@@ -175,14 +176,14 @@ def keyness_block(
             for k in by_decade[decade]
             if k.log_ratio > 0 and k.term.lower() not in exclude
         ]
-        keyed.sort(key=lambda k: k.log_likelihood, reverse=True)
+        keyed.sort(key=lambda k: k.score, reverse=True)
         out.append(
             {
                 "decade": decade,
                 "terms": [
                     {
                         "term": k.term,
-                        "log_likelihood": round(k.log_likelihood, 2),
+                        "score": round(k.score, 2),
                         "log_ratio": round(k.log_ratio, 2),
                         "freq": k.freq,
                     }
@@ -266,6 +267,7 @@ def assemble_data(
     associations: dict[str, Any] | None = None,
     popularity: dict[str, Any] | None = None,
     places: dict[str, Any] | None = None,
+    allotax: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the single ``DATA`` blob the template renders.
 
@@ -286,6 +288,7 @@ def assemble_data(
         associations: The genre association cross-tabs (may be empty/``None``).
         popularity: The artist popularity/salience blocks (may be empty/``None``).
         places: The place-name / H3-map blocks (may be empty/``None``).
+        allotax: The allotaxonograph decade list (may be empty/``None``).
 
     Returns:
         The dashboard data dict.
@@ -318,6 +321,7 @@ def assemble_data(
         "associations": associations or {},
         "popularity": popularity or {},
         "places": places or {},
+        "allotax": allotax or {},
     }
 
 
@@ -362,7 +366,7 @@ def emit_assets(
         shutil.rmtree(clouds_dir)
 
     for rows, weight_key, prefix in (
-        (keyness, "log_likelihood", "decade_"),
+        (keyness, "score", "decade_"),
         (frequency, "freq", "freq_decade_"),
     ):
         manifest = render_clouds(
@@ -377,6 +381,15 @@ def emit_assets(
             cloud = manifest.get(int(row["decade"]))
             if cloud is not None:
                 row["cloud"] = cloud
+
+    # Copy the cached allotaxonograph PNGs (rendered by src.lyrics.allotax).
+    if DEFAULT_ALLOTAX_DIR.is_dir():
+        dst_allotax = assets / "allotax"
+        if dst_allotax.exists():
+            shutil.rmtree(dst_allotax)
+        dst_allotax.mkdir(parents=True, exist_ok=True)
+        for png in DEFAULT_ALLOTAX_DIR.glob("*.png"):
+            shutil.copy2(png, dst_allotax / png.name)
 
     render_og_card(assets / "og.png", font_dir=font_dir)
 
@@ -749,6 +762,26 @@ def load_places(places_dir: Path) -> dict[str, Any]:
     return _load_json(places_dir / "places.json", {})
 
 
+def load_allotax(allotax_dir: Path) -> dict[str, Any]:
+    """List the decades that have allotaxonograph PNGs (empty if none rendered).
+
+    Args:
+        allotax_dir: Directory of ``<lo>_<hi>.png`` files (see
+            :func:`src.lyrics.allotax.build_allotax`).
+
+    Returns:
+        ``{"decades": [ints >= MIN_DECADE], "alpha": "1/3"}``, or ``{}`` if absent.
+    """
+    if not allotax_dir.is_dir():
+        return {}
+    decades: set[int] = set()
+    for png in allotax_dir.glob("*_*.png"):
+        for part in png.stem.split("_"):
+            if part.isdigit() and int(part) >= MIN_DECADE:
+                decades.add(int(part))
+    return {"decades": sorted(decades), "alpha": "1/3"} if decades else {}
+
+
 def load_associations(
     docs: list[Any],
     *,
@@ -912,6 +945,7 @@ def load_all_data(
     )
     popularity = load_popularity(db_path)
     places = load_places(Path(places_dir))
+    allotax = load_allotax(DEFAULT_ALLOTAX_DIR)
 
     data = assemble_data(
         overview=overview,
@@ -928,6 +962,7 @@ def load_all_data(
         associations=associations,
         popularity=popularity,
         places=places,
+        allotax=allotax,
     )
     return data, keyness, frequency
 

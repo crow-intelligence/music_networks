@@ -245,6 +245,12 @@
   /* §Helyek — H3 voxel map */
   .places-map { width: 100%; height: auto; max-width: 820px; margin: var(--sp-1) auto; }
   .place-bar { cursor: help; }
+  /* §allotax — allotaxonograph image + decade pickers */
+  .allotax-vs { color: var(--muted); margin: 0 10px; }
+  .allotax-img { width: 100%; height: auto; max-width: 1000px; display: block;
+    margin: var(--sp-2) 0; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--card-bg); }
+  .allotax-cap { color: var(--muted); font-style: italic; font-size: var(--fs-caption); }
   /* Reusable horizontal bar list — x-axis scale under the bars, exact value on
      hover (instead of cramped end labels). */
   .barlist { margin: var(--sp-1) 0 var(--sp-2); }
@@ -348,6 +354,16 @@
     kiemelkedőséget kódolja. Mindkét felhő átváltható rangsorolt listára.</p>
   <div id="c-keyness-controls" class="controls"></div>
   <div id="c-keyness" class="cloud-pair"></div>
+</section>
+
+<section id="allotax"><h2>Két évtized szóhasználatának összevetése</h2>
+  <p class="note">Az <em>allotaxonográf</em> két korszak szóhasználatát veti össze.
+    A bal oldali rombuszon a szavak a két évtizedbeli gyakorisági rangsoruk szerint
+    helyezkednek el; a szélek felé azok kerülnek, amelyek az egyik évtizedben sokkal
+    jellemzőbbek. A jobb oldali lista a legnagyobb eltolódást mutató szavakat
+    sorolja fel (rangfordulat-divergencia). Válassz két évtizedet!</p>
+  <div id="c-allotax-controls" class="controls"></div>
+  <div id="c-allotax"></div>
 </section>
 
 <section id="lexdiv"><h2>A szókincs változatossága</h2>
@@ -1235,8 +1251,8 @@ function barList(host, rows, opts = {}) {
       }));
       host.appendChild(cloudFigure(byKn[cur], {
         title: "Megkülönböztető szavak",
-        pillTitle: "log-likelihood",
-        pill: t => "G² " + t.log_likelihood,
+        pillTitle: "kulcsszó-érték (Simple Maths)",
+        pill: t => "SM " + t.score,
       }));
     }
     draw();
@@ -1892,6 +1908,50 @@ function barList(host, rows, opts = {}) {
     draw("");
     sel.addEventListener("change", () => draw(sel.value));
   })();
+
+  // Két évtized összevetése — allotaxonográf (keyflux) PNG-k, tetszőleges párra.
+  (function () {
+    const A = DATA.allotax || {};
+    const decs = A.decades || [];
+    const host = document.getElementById("c-allotax");
+    if (decs.length < 2) {
+      empty("c-allotax", "Nincs adat — előbb futtasd: python -m src.lyrics.allotax");
+      return;
+    }
+    const ctrls = document.getElementById("c-allotax-controls");
+    const mkSel = init => {
+      const s = document.createElement("select");
+      s.setAttribute("aria-label", "Évtized kiválasztása");
+      s.innerHTML = decs.map(d =>
+        `<option value="${d}"${d === init ? " selected" : ""}>${decadeLabel(d)}</option>`
+      ).join("");
+      return s;
+    };
+    const selA = mkSel(decs[0]);
+    const selB = mkSel(decs[decs.length - 1]);
+    const vs = document.createElement("span");
+    vs.className = "allotax-vs"; vs.textContent = "↔";
+    ctrls.append(selA, vs, selB);
+    const img = document.createElement("img"); img.className = "allotax-img";
+    const cap = document.createElement("p"); cap.className = "allotax-cap";
+    host.append(img, cap);
+    function draw() {
+      const x = +selA.value, y = +selB.value;
+      if (x === y) {
+        img.style.display = "none";
+        cap.textContent = "Válassz két különböző évtizedet.";
+        return;
+      }
+      const lo = Math.min(x, y), hi = Math.max(x, y);
+      img.style.display = "";
+      img.src = "assets/allotax/" + lo + "_" + hi + ".png";
+      img.alt = "Allotaxonográf: " + decadeLabel(lo) + " ↔ " + decadeLabel(hi);
+      cap.textContent = "";
+    }
+    selA.addEventListener("change", draw);
+    selB.addEventListener("change", draw);
+    draw();
+  })();
 })();
 
 // ---- Navigable chapters: group the sections, show one at a time, with a
@@ -1899,7 +1959,7 @@ function barList(host, rows, opts = {}) {
 (function () {
   const CHAPTERS = [
     {id: "temak", title: "Témák", sections: ["topics", "assoc-topic"]},
-    {id: "szavak", title: "Szavak", sections: ["keyness", "lexdiv"]},
+    {id: "szavak", title: "Szavak", sections: ["keyness", "allotax", "lexdiv"]},
     {id: "erzelem", title: "Érzelem", sections: ["emotion-pair"]},
     {id: "rimek", title: "Rímek", sections: ["rhyme"]},
     {id: "jelentesvaltozas", title: "Jelentésváltozás", sections: ["change", "drift", "neighbors"]},

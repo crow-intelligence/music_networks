@@ -4,7 +4,7 @@ A metaadatok (megjelenés éve, szerző, előadó, stílus) a MusicBrainz, Disco
 
 A langdetect csomag segítségével kiszűrtük a nem magyar dalszövegeket, majd MinHash-LSH segítségével kiszűrtük a duplikátumokat. HuSpaCy segítségével dolgoztuk fel a szövegeket (lemmatizálás, tokenizálás, stb.). A topikmodell BERTopic segítségével készült, huBERT beágyazásokkal. A szókincs változatosságát a MATTR (mozgóablakos típus-token arány) mérőszámmal mértük, a dalok zenei stílusát pedig a Discogs-kiadások alapján határoztuk meg.
 
-Az érzelemfelismeréshez a MilaNLProc/xlm-emo-t modellt használtuk. A diakrón szóbeágyazásokat a chronowords csomaggal készítettük el.
+Az érzelemfelismeréshez a MilaNLProc/xlm-emo-t modellt használtuk. A diakrón szóbeágyazásokat a chronowords csomaggal készítettük el. Az évtizedekre jellemző kulcsszavakat és az évtizedek szóhasználatának összevetését (rangfordulat-divergencia, allotaxonográf) a keyflux csomaggal számoltuk. A szóhálókat a kenon csomaggal építettük, a dalszövegekben szereplő helyneveket pedig egy OpenStreetMap-alapú névtárral kerestük meg, és H3-hexacellákra vetítettük (h3 csomag).
 
 A projekt korábbi, 2020-as változata a [blogunkon olvasható](https://blog.crowintelligence.org/hu/2020/08/19/hatvan-ev-dalszovegei/): „Ezek minden idők leggyakoribb és legfontosabb szavai a magyar popslágerekben” (2020).
 

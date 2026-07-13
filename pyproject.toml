@@ -14,6 +14,7 @@ dependencies = [
     "gensim",
     "httpx>=0.28.1",
     "kenon>=0.1.1",
+    "keyflux>=0.2.0",
     "langdetect",
     "lxml",
     "matplotlib",
@@ -159,4 +160,5 @@ testpaths = [
     "src/essay/build.py",
     "src/lyrics/kwic.py",
     "src/lyrics/places.py",
+    "src/lyrics/allotax.py",
 ]
