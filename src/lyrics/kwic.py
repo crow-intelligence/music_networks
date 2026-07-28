@@ -22,9 +22,11 @@ DEFAULT_CORPUS_DIR = Path("data/processed/corpus")
 DEFAULT_KWIC_DIR = Path("data/processed/kwic")
 MIN_DECADE = 1950
 
-# Essay target words → a safe match stem (trimmed for Hungarian inflection).
-DEFAULT_TARGETS: dict[str, str] = {
-    "szerelem": "szerel",
+# Essay target words → a match prefix (or tuple of prefixes) trimmed for Hungarian
+# inflection. Tuples exclude homographs: "szerelem"/"szerelm" catches the love
+# inflections (szerelmes, szerelmet) but NOT szerel-ik / szerel-vény (mount/train).
+DEFAULT_TARGETS: dict[str, str | tuple[str, ...]] = {
+    "szerelem": ("szerelem", "szerelm"),
     "lány": "lány",
     "csaj": "csaj",
     "pénz": "pénz",
@@ -49,14 +51,19 @@ def _norm(token: str) -> str:
 
 
 def concordances(
-    text: str, stem: str, *, window: int = 4, limit: int | None = None
+    text: str,
+    stem: str | tuple[str, ...],
+    *,
+    window: int = 12,
+    limit: int | None = None,
 ) -> list[dict[str, str]]:
     """Find ``±window``-word windows around words whose stem matches ``stem``.
 
     Args:
         text: Surface lyric text (whitespace-separated).
-        stem: Lowercased match stem (a word matches if its normalised form
-            starts with it).
+        stem: A lowercased match prefix, or a tuple of prefixes — a word matches
+            if its normalised form starts with any of them. Tuples let a target
+            keep its true inflections while excluding homographs.
         window: Words of context kept on each side.
         limit: Max windows to return (``None`` = all).
 
@@ -67,17 +74,22 @@ def concordances(
         >>> c = concordances("Egy szép szerelem dala szól ma", "szerel")
         >>> c[0]["pre"], c[0]["kw"], c[0]["post"]
         ('Egy szép', 'szerelem', 'dala szól ma')
+        >>> [c["kw"] for c in concordances(
+        ...     "a szerelvény és a szerelmem", ("szerelem", "szerelm"))]
+        ['szerelmem']
     """
     words = text.split()
     out: list[dict[str, str]] = []
     for i, word in enumerate(words):
         if not _norm(word).startswith(stem):
             continue
-        out.append({
-            "pre": " ".join(words[max(0, i - window):i]),
-            "kw": word,
-            "post": " ".join(words[i + 1:i + 1 + window]),
-        })
+        out.append(
+            {
+                "pre": " ".join(words[max(0, i - window) : i]),
+                "kw": word,
+                "post": " ".join(words[i + 1 : i + 1 + window]),
+            }
+        )
         if limit is not None and len(out) >= limit:
             break
     return out
@@ -87,8 +99,8 @@ def build_kwic(
     corpus_dir: Path | str = DEFAULT_CORPUS_DIR,
     out_dir: Path | str = DEFAULT_KWIC_DIR,
     *,
-    targets: dict[str, str] | None = None,
-    window: int = 4,
+    targets: dict[str, str | tuple[str, ...]] | None = None,
+    window: int = 12,
     per_decade: int = 8,
 ) -> dict[str, dict[str, list[dict[str, str]]]]:
     """Collect per-(word, decade) concordances from the corpus into ``kwic.json``.
@@ -157,7 +169,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Build KWIC concordances for the essay.")
     ap.add_argument("--corpus-dir", default=str(DEFAULT_CORPUS_DIR))
     ap.add_argument("--out-dir", default=str(DEFAULT_KWIC_DIR))
-    ap.add_argument("--window", type=int, default=4)
+    ap.add_argument("--window", type=int, default=12)
     ap.add_argument("--per-decade", type=int, default=8)
     args = ap.parse_args()
     res = build_kwic(

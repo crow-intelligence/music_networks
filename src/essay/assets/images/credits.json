@@ -1,9 +1,56 @@
 {
-  "era-1960.png": {
-    "title": "MRT Táncdalfesztivál 1968 (főcím)",
-    "author": "Magyar Rádió és Televízió",
-    "license": "Nem szabad felhasználású — tévéműsor képkockája",
-    "source": "https://hu.wikipedia.org/wiki/F%C3%A1jl:MRT_T%C3%A1ncdalfesztiv%C3%A1l_1968.png",
-    "via": "NAVA (nava.hu/id/1774536)"
+  "hero.jpg": {
+    "title": "TG12345 Mk.II desk (1970s) and Microphones, Abbey Road Studios",
+    "author": "Josephenus P. Riley",
+    "license": "CC BY 2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:TG12345_Mk.II_desk_(1970s)_and_Microphones,_Abbey_Road_Studios.jpg"
+  },
+  "media-1950.jpg": {
+    "title": "Bread – Hooked On You (1977) 45 RPM single US",
+    "author": "Elektra",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:Bread_%E2%80%93_Hooked_On_You_(1977)_45_RPM_single_US.png"
+  },
+  "media-1960.jpg": {
+    "title": "2017 Magnetofon szpulowy Aria M 2408 SD",
+    "author": "Jacek Halicki",
+    "license": "CC BY-SA 4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:2017_Magnetofon_szpulowy_Aria_M_2408_SD.jpg"
+  },
+  "media-1970.jpg": {
+    "title": "Ca 1964 Bang Olufsen Beogram 42V record player Denmark",
+    "author": "R. Henrik Nilsson",
+    "license": "CC BY 4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Ca_1964_Bang_Olufsen_Beogram_42V_record_player_Denmark.jpg"
+  },
+  "media-1980.jpg": {
+    "title": "Cassette IMG 6812-mod (13845557863)",
+    "author": "stuart.childs",
+    "license": "CC BY 2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Cassette_IMG_6812-mod_(13845557863).jpg"
+  },
+  "media-1990.jpg": {
+    "title": "8 cd-da disc-to-1 mini mp3-cd",
+    "author": "Toshi sanyoshi",
+    "license": "CC BY-SA 4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:8_cd-da_disc-to-1_mini_mp3-cd.jpg"
+  },
+  "media-2000.jpg": {
+    "title": "IPod 5G, nano 2G, shuffle 2G",
+    "author": "ismeretlen",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:IPod_5G,_nano_2G,_shuffle_2G.jpg"
+  },
+  "media-2010.jpg": {
+    "title": "Auriculares movil",
+    "author": "kaboompics",
+    "license": "CC0",
+    "source": "https://commons.wikimedia.org/wiki/File:Auriculares_movil.jpg"
+  },
+  "media-2020.jpg": {
+    "title": "ActiveSound wireless earbuds by Hykker (POJM200483)",
+    "author": "Warszawska róg Szerokiej w Tomaszowie Mazowieckim, w województwie łódzkim, PL, EU",
+    "license": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:ActiveSound_wireless_earbuds_by_Hykker_(POJM200483).jpg"
   }
 }

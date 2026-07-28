@@ -1,94 +1,113 @@
-# A szerző szövege SZÓ SZERINT — csak elírást javítunk. A [Vizuális trigger]/[KWIC]
-# direktívák scene-konfigggá alakulnak (theme/figure/image/highlight/seed + step kwic),
-# nem jelennek meg prózaként.
+# A szerző decade-szövege SZÓ SZERINT — csak elírást javítunk. A scene-config
+# (figure/decade/image/kicker/title + step kwic) NEM jelenik meg prózaként.
+# A dalcímeket a kicker (évtized) + title (dalcím) párra bontottuk — a próza érintetlen.
 
 @scene intro
   figure: none
-  theme: intro
+  kicker: Bevezető
 @step
-A magyar könnyűzene velünk él. Hetven év alatt sokat változott, ahogy mi is. Nyomot hagyott benne a változó világ, a rendszerváltás és az elmúlt másfél évtized. Nézzük meg a dalszövegek adatain és szavain keresztül, mi is történt, hogyan formálódott a kollektív tudattalanunk.
+A magyar könnyűzene velünk él. Hetven év alatt sokat változott, ahogy mi is. Nyomot hagyott benne a változó világ, a rendszerváltás és az elmúlt másfél évtized. Nézzük meg a dalszövegek adatain és szavain keresztül, mi is történt.
+
+@scene vectorspace
+  figure: vectorspace
+  kicker: Illa berek, nádak erek, szavak meg a vektorterek
+  title: Változó jelentés
+  chart: semantic:szerelem
+@step
+Minden évtizedre külön szóbeágyazást tanítottunk — a szavakat egy többszáz dimenziós vektortérbe helyezve —, majd Procrustes-forgatással közös térbe hoztuk őket, hogy összevethetők legyenek. Az alábbi ábrán minden kulcsszó egy útvonalat rajzol, ahogy a jelentése évtizedről évtizedre elmozdul: a világosabb pont a korábbi, a sötétebb a későbbi korszak. A pontos helyek közelítők — a lényeg az elmozdulás iránya.
+
+@scene overview
+  figure: dia-kwic
+  kicker: Hét szó, hetven év
+  title: Egy szó, ahogy változik
+  word: szerelem
+@step
+Nem a számok mesélik el a történetet, hanem a szavak — a maguk valódi környezetében. Vegyük a „szerelem” szót: egyetlen sort minden évtizedből, ahogy a dalszövegekben ténylegesen előfordul. Görgess tovább, és évtizedről évtizedre hét kulcsszó vonul fel — mindegyik a korszak dalaiból kiollózva.
 
 @scene s1950
-  title: Pancsoló kislány (1950-es évek)
-  theme: t1950
+  kicker: 1950-es évek
+  title: Pancsoló kislány
   decade: 1950
-  figure: emotion-stack
-  image: era-1950.jpg
+  figure: kwic-concordance
+  chart: emotion
+  image: media-1950.jpg
 @step
   kwic: lány, szerelem, éjszaka
 Az ötvenes évek Magyarországán a könnyűzene elsődleges célja a szórakoztatás és a valóság elfedése volt. A dalok egy konfliktusmentes, eszményített idillt festettek le. A nyelvezet modoros, jól fésült, a szókincs pedig az adatok alapján a legkevésbé változatos. Nincsenek nagy megfejtések, csak tiszta rímek, ártatlan flörtök és balatoni nyarak.
 
 @scene s1960
-  title: Így mulat egy beates magyar úr (1960-as évek)
-  theme: t1960
+  kicker: 1960-as évek
+  title: Így mulat egy beates magyar úr
   decade: 1960
-  figure: mattr-line
-  image: era-1960.png
+  figure: kwic-concordance
+  chart: ego:lány
+  image: media-1960.jpg
 @step
   kwic: élet, lány
 A Táncdalfesztiválok csillogása találkozik a beat-korszak első gitárpengetéseivel. A fiatalok kapnak egy saját nyelvet. A szövegek még mindig alapvetően romantikusak, de a keretek elkezdenek lazulni. Bejön egy új, pimaszabb utcai szleng, ahol az élet kezd kinyílni a Kádár-kori ifjúság számára.
 
 @scene s1970
-  title: Kétforintos dal (1970-es évek)
-  theme: t1970
+  kicker: 1970-es évek
+  title: Kétforintos dal
   decade: 1970
-  figure: topics-line
-  highlight: Pénz és gazdagság
-  image: era-1970.jpg
+  figure: kwic-concordance
+  chart: topics
+  image: media-1970.jpg
 @step
   kwic: pénz, éjszaka, szabadság
 A gitárok betorzultak, a haj megnőtt, a szövegek pedig hirtelen földhözragadtabbak lettek. Megjelenik a "csöves" generáció. A hard rock és a blues-rock szakít a habkönnyű idillel. Bejön a rögvalóság: a külváros, a munka, a pénztelenség. A magyar dalszövegírók ekkor kezdik a legvastagabb metaforákba csomagolni azt, amit a rendszer miatt nem mondhatnak ki nyíltan.
 
 @scene s1980
-  title: Áll egy ifjú élmunkás a réten (1980-as évek)
-  theme: t1980
+  kicker: 1980-as évek
+  title: Áll egy ifjú élmunkás a réten
   decade: 1980
-  figure: topics-line
-  highlight: Trágár utcanyelv
-  image: era-1980.jpg
+  figure: kwic-concordance
+  chart: topics-spot:3
+  image: media-1980.jpg
 @step
   kwic: élet, pénz, szabadság
 A Kádár-rendszer falai repedeznek, a zene nyílt provokációvá válik. Megjelenik a magyar punk és az újhullám. Erdős Péter hírhedt cikkében "szennyhullámként" hivatkozik a jelenségre, és az adatok igazolják a sokkját: a nyelv felborul. A finom metaforákat felváltja a nyers irónia, a düh és az explicit szókimondás.
 
 @scene s1990
-  title: Álomhajó (1990-es évek)
-  theme: t1990
+  kicker: 1990-es évek
+  title: Álomhajó
   decade: 1990
-  figure: diachronic-line
-  highlight: szabadság
-  image: era-1990.jpg
+  figure: kwic-concordance
+  chart: semantic:szabadság
+  image: media-1990.jpg
 @step
   kwic: szabadság, éjszaka, pénz
 Leomlik a fal, bejön a vadkapitalizmus, a popzenei piac szétesik. Megfér egymás mellett a lakossági techno és a grunge. A legszebb adatos bizonyíték a "szabadság" szó jelentésének brutális törése. A korábbi évtizedek politikai, vágyakozó metaforájából hirtelen konzumtermék lesz. A szabadság immár azt jelenti: szabad mindent megvenni és fogyasztani.
 
 @scene s2000
-  title: Nem csak neked fáj (2000-es évek)
-  theme: t2000
+  kicker: 2000-es évek
+  title: Nem csak neked fáj
   decade: 2000
-  figure: topics-line
-  highlight: Szerelem
-  image: era-2000.jpg
+  figure: kwic-concordance
+  chart: topics-spot:10
+  image: media-2000.jpg
 @step
   kwic: szerelem, élet
 Az útkeresés és a befelé fordulás időszaka. A magyar pop-rock és az emo hatására a dalok fókusza eltolódik. A legmeglepőbb adat, hogy a szerelem, mint téma meredeken zuhanni kezd. A helyét átveszi az egyéni fájdalom, a panaszkodás és a belső vívódás. A nagy, közös buli véget ért, mindenki a saját sebeivel van elfoglalva.
 
 @scene s2010
-  title: Apuveddmeg (2010-es évek)
-  theme: t2010
+  kicker: 2010-es évek
+  title: Apuveddmeg
   decade: 2010
-  figure: network-ego
-  seed: szerelem
-  image: era-2010.jpg
+  figure: kwic-concordance
+  chart: ego:csaj
+  image: media-2010.jpg
 @step
   kwic: pénz, lány, csaj
 A YouTube-generáció és a pop-rap térhódításával a fókusz a pillanaton és a státuszszimbólumokon van. A szerelem nyelvezete teljesen lecsupaszodik: a költői képek eltűnnek, a kapcsolati dinamikákat egyszerű igék és adok-kapok viszonyok írják le. A "lány" szót egyre inkább felváltja a "csaj".
 
 @scene s2020
-  title: Bagira (2020-as évek)
-  theme: t2020
+  kicker: 2020-as évek
+  title: Bagira
   decade: 2020
-  figure: emotion-stack
-  image: era-2020.jpg
+  figure: kwic-concordance
+  chart: ego:pénz
+  image: media-2020.jpg
 @step
   kwic: éjszaka, pénz
-A kortárs magyar popzenét a trap és a new school hip-hop uralja. A nyelvezet sűrű, asszociatív, és hihetetlenül feszült. Az XLM-EMO adatok világosan mutatják: a "harag kora" ez. Az utcai jelenetek, a frusztráció, a toxikus kapcsolatok kiszorították az idillt. A dalok hősei már nem elvágyódnak, hanem túlélni akarnak.
+A kortárs magyar popzenét a trap és a new school hip-hop uralja. A nyelvezet sűrű, asszociatív, és hihetetlenül feszült. Az emócióelemzés azt mutatja, ez a harag korszaka. Az utcai jelenetek, a frusztráció, a toxikus kapcsolatok kiszorították az idillt. A dalok hősei már nem elvágyódnak, hanem túlélni akarnak.
