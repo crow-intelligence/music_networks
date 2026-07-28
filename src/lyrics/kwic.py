@@ -35,6 +35,11 @@ DEFAULT_TARGETS: dict[str, str | tuple[str, ...]] = {
     "élet": "élet",
 }
 
+# Lowercased substrings that mark a window as junk even when the keyword itself is a
+# real hit — e.g. "árvalányhaj" (feather-grass, a plant) can sit in a "lány" window's
+# wide context. A window is dropped if any of these appears in its pre+kw+post.
+_CONTEXT_BLOCKLIST: tuple[str, ...] = ("árvalányhaj",)
+
 _STRIP = re.compile(r"^\W+|\W+$", re.UNICODE)
 
 
@@ -105,10 +110,14 @@ def build_kwic(
 ) -> dict[str, dict[str, list[dict[str, str]]]]:
     """Collect per-(word, decade) concordances from the corpus into ``kwic.json``.
 
+    Keeps **at most one window per song** per word (so a decade's windows come from
+    distinct songs — no same-song overlaps), skips windows whose context matches
+    :data:`_CONTEXT_BLOCKLIST`, and de-duplicates identical windows across songs.
+
     Args:
         corpus_dir: Per-decade corpus JSONL dir (records carry surface ``text``).
         out_dir: Output dir (``kwic.json`` is written here).
-        targets: ``word → stem`` map (defaults to :data:`DEFAULT_TARGETS`).
+        targets: ``word → prefix(es)`` map (defaults to :data:`DEFAULT_TARGETS`).
         window: Context words per side.
         per_decade: Max distinct windows kept per word per decade.
 
@@ -133,16 +142,21 @@ def build_kwic(
                 for word, stem in targets.items():
                     if len(bucket[word]) >= per_decade:
                         continue
-                    for c in concordances(text, stem, window=window, limit=2):
+                    # At most ONE window per song per word (no same-song overlaps):
+                    # take the first match whose context is non-empty, not blocklisted
+                    # and not already seen, then move on to the next song.
+                    for c in concordances(text, stem, window=window):
                         if not c["pre"] and not c["post"]:
                             continue  # need some context
+                        blob = f"{c['pre']} {c['kw']} {c['post']}".lower()
+                        if any(bad in blob for bad in _CONTEXT_BLOCKLIST):
+                            continue
                         key = f"{c['pre']}|{c['kw']}|{c['post']}".lower()
                         if key in seen[word]:
                             continue
                         seen[word].add(key)
                         bucket[word].append(c)
-                        if len(bucket[word]) >= per_decade:
-                            break
+                        break
         for word in targets:
             if bucket[word]:
                 result[word][str(decade)] = bucket[word]
